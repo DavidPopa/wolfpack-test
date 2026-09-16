@@ -1,6 +1,6 @@
 # SPRINTS
 
-Local planning and execution workspace, adapted from `dragoon-matrix/SPRINTS`. The layout keeps the source project's sprint board, scope map, plan approval and closeout, with separate task/QA/review documents for our manual-agent workflow.
+Local planning and execution workspace for sprint boards, scope maps, plan approval, closeout, and separate task, QA, and review documents used by the manual-agent workflow.
 
 ## Structure
 
@@ -27,8 +27,8 @@ SPRINTS/
 1. The orchestrator creates or updates a phase with a bounded objective and a task board. Use only as many tasks as the work needs; no minimum task counts or imported enterprise framework.
 2. Fill each task's `write_scope`, `do_not_touch`, `context_must_read`, dependencies, worktree creation policy and verification commands using the templates under `docs/templates/`.
 3. The developer approves the actual plan. Record that approval, exact baseline and plan revision in `plan-lock.md`. A draft/unlocked phase cannot start implementation. This is a manual approval record, not an installed hash checker.
-4. The developer starts a Sol/medium agent with one implementation task. The agent creates its own branch/worktree from the approved baseline and records its actual location. Independent tasks may run in parallel only with approved disjoint ownership; the board records integration order separately.
-5. The agent implements, runs required implementation checks, updates the task and stops. The developer supplies QA and review instructions separately afterward; the same agent may continue. Only after these stages does the orchestrator perform its final check. The developer alone commits, publishes and merges PRs.
+4. The developer starts a Sol/medium agent with one implementation task. From the task after the current foundation task onward, the agent creates its branch/worktree at `.worktree/<approved-pr-slug>` under the source checkout and records its actual location and developer run commands. The root repository must ignore `.worktree/`. Independent tasks may run in parallel only with approved disjoint ownership; the board records integration order separately.
+5. The agent implements, runs required implementation checks, updates the task and stops. The developer supplies QA and review instructions separately afterward; the same agent may continue. Only after these stages does the orchestrator perform its final check. The developer commits and pushes, or may explicitly direct the orchestrator to perform a specific reviewed commit/push. The developer publishes and merges PRs.
 6. Complete `closeout.md` against the integrated snapshot, with verification, fixed/deferred findings, remaining risks and real PR/merge status. Reapprove the plan if scope, baseline, dependencies or ownership change.
 
 ## Git and delivery

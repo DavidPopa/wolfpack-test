@@ -1,6 +1,38 @@
-# Map Chat foundation
+# Map Chat
 
-This repository currently contains the runnable foundation only: a Next.js 16 health page, an Express 5 infrastructure API, a browser-safe shared contract, an empty Socket.IO 4 transport, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication, rooms, messages, maps, rate limits, and product realtime events are intentionally not implemented yet.
+Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. Visitors will explore public chat rooms placed on a map and read their conversations; authenticated users will create rooms and send messages in real time.
+
+The repository currently contains the runnable foundation: a Next.js 16 health page, an Express 5 infrastructure API, a browser-safe shared contract, an empty Socket.IO 4 transport, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication, rooms, messages, maps, rate limits, and product realtime events are intentionally not implemented yet.
+
+## Planned features
+
+- Explore public chat rooms through map pins.
+- Read room conversations without an account.
+- Sign in with Google to create rooms and send messages.
+- Persist rooms and message history in PostgreSQL.
+- Receive new rooms and messages in real time.
+- Provide optimistic feedback while a new room is being saved.
+- Support desktop and mobile layouts.
+
+## Technology
+
+- **Frontend:** Next.js, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query
+- **Backend:** Node.js, Express, Socket.IO, Better Auth
+- **Data:** PostgreSQL, Prisma 7, Redis
+- **Map:** Leaflet
+- **Testing:** Jest, React Testing Library, Playwright with Chromium
+- **Tooling:** pnpm workspaces, Docker Compose, ESLint, Husky, GitHub Actions
+
+## Project structure
+
+```text
+apps/
+  web/          Next.js application
+  api/          Express API
+packages/
+  contracts/    Shared API and realtime contracts
+docs/           Product and engineering documentation
+```
 
 ## Pinned runtime and install
 
@@ -75,6 +107,13 @@ pnpm hooks:install
 ```
 
 The project-local Codex `PreToolUse` guard and harmless fixtures live under `.codex/`. Project hooks run only after the current definition is reviewed and trusted in Codex; see `.codex/README.md`. Fixtures do not prove trust or live tool routing, and the guard is defense in depth rather than a complete security boundary.
+
+## Documentation
+
+- [Technical PRD](docs/PRD.md)
+- [Engineering notes](docs/ENGINEERING.md)
+- [Testing strategy](docs/TESTING.md)
+- [Agent workflow](AGENTS.md)
 
 ## CI and current limits
 
