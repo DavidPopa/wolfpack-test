@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { createClient } from "redis";
+import type { RequestHandler } from "express";
 import { io as createSocket, type Socket } from "socket.io-client";
 import { createApp } from "./app.js";
 import { createAppServer } from "./server.js";
@@ -8,6 +9,7 @@ import { createAppServer } from "./server.js";
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const redisUrl = process.env.TEST_REDIS_URL;
 const keyPrefix = process.env.TEST_REDIS_KEY_PREFIX;
+const unusedAuthHandler: RequestHandler = (_request, response) => { response.sendStatus(500); };
 if (!databaseUrl || !redisUrl || !keyPrefix?.startsWith("foundation:task001:")) {
   throw new Error("TEST_DATABASE_URL, TEST_REDIS_URL, and an isolated foundation:task001: key prefix are required");
 }
@@ -45,7 +47,11 @@ describe("real infrastructure", () => {
     expect(await redis.exists(key)).toBe(0);
   });
   it.each(["polling", "websocket"] as const)("accepts a real Socket.IO %s client", async (transport) => {
-    const server = createAppServer(createApp({ probes: { postgres: async () => true, redis: async () => true }, readinessTimeoutMs: 100 }));
+    const server = createAppServer(createApp({
+      authHandler: unusedAuthHandler,
+      probes: { postgres: async () => true, redis: async () => true },
+      readinessTimeoutMs: 100
+    }));
     const port = await server.listen(0, "127.0.0.1");
     let socket: Socket | undefined;
     try {

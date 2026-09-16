@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 const require = createRequire(import.meta.url);
 const socketClientPath = require.resolve("socket.io-client/dist/socket.io.js");
 
-test("production page and API are available through the proxy", async ({ page, request }) => {
+test("production page and API are available through the proxy", async ({ page, request, baseURL }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Foundation is running" })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("API status: ok");
@@ -16,6 +16,20 @@ test("production page and API are available through the proxy", async ({ page, r
   expect(missing.status()).toBe(404);
   expect(missing.headers()["content-type"]).toContain("application/json");
   expect(await missing.json()).toEqual({ error: { code: "NOT_FOUND", message: "Route not found" } });
+
+  const anonymousSession = await request.get("/api/auth/get-session");
+  expect(anonymousSession.status()).toBe(200);
+  expect(await anonymousSession.json()).toBeNull();
+
+  const passwordSignUp = await request.post("/api/auth/sign-up/email", {
+    headers: { origin: baseURL ?? "" },
+    data: { name: "Test User", email: "test@example.invalid", password: "not-a-real-password" }
+  });
+  expect(passwordSignUp.status()).toBe(400);
+  expect(await passwordSignUp.json()).toEqual({
+    message: "Email and password sign up is not enabled",
+    code: "EMAIL_PASSWORD_SIGN_UP_DISABLED"
+  });
 });
 
 for (const transport of ["polling", "websocket"] as const) {

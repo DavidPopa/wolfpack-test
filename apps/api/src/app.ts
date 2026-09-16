@@ -1,12 +1,18 @@
 import { healthResponseSchema, notFoundResponseSchema, readinessResponseSchema } from "@map-chat/contracts";
-import express, { type Express } from "express";
+import express, { type Express, type RequestHandler } from "express";
 import { checkReadiness, type ProbeDependencies } from "./readiness.js";
 
-export interface AppOptions { probes: ProbeDependencies; readinessTimeoutMs: number }
+export interface AppOptions {
+  authHandler: RequestHandler;
+  probes: ProbeDependencies;
+  readinessTimeoutMs: number;
+}
 
 export function createApp(options: AppOptions): Express {
   const app = express();
   app.disable("x-powered-by");
+  app.all("/api/auth/*splat", options.authHandler);
+  app.use(express.json());
   app.get("/api/health", (_request, response) => {
     response.status(200).json(healthResponseSchema.parse({ status: "ok", service: "api" }));
   });

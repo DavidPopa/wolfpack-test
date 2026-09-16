@@ -2,7 +2,7 @@
 
 Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. Visitors will explore public chat rooms placed on a map and read their conversations; authenticated users will create rooms and send messages in real time.
 
-The repository contains the runnable foundation plus the initial Prisma data layer: Better Auth's core tables, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication HTTP behavior, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
+The repository contains the runnable foundation plus the initial Prisma data layer and Google-only Better Auth API configuration: Better Auth's core tables and Express handler, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Persistent session integration, authentication UI, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
 
 ## Planned features
 
@@ -70,6 +70,18 @@ pnpm stack:stop
 
 `stack:stop` stops only this project's services and preserves the named PostgreSQL volume. Restart with `pnpm stack:up`. Do not use `down --volumes`, pruning, or a developer database. Images are pinned by tag and multi-platform digest: Node `24.21.0-bookworm-slim`, PostgreSQL `17.8-bookworm`, Redis `7.4.11-bookworm`, and stable nginx `1.30.4-alpine`. App image stages run as the non-root `node` user.
 
+## Google authentication configuration
+
+The API requires `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`. `BETTER_AUTH_URL` must be the browser-visible origin with no path or trailing slash. `BETTER_AUTH_TRUSTED_ORIGINS` is a comma-separated list of exact origins and must include `BETTER_AUTH_URL`. The committed `.env.example`, development command, and Compose defaults contain dummy values only; they make configuration and non-provider checks runnable but cannot complete Google OAuth.
+
+Better Auth is exposed through the same origin as the web application. Register the exact Google redirect URI by appending `/api/auth/callback/google` to the browser-visible origin:
+
+- Local `pnpm dev`: `http://127.0.0.1:3000/api/auth/callback/google` (or the selected `WEB_PORT`). Next proxies `/api/*` to Express.
+- Local production Compose: `http://127.0.0.1:8081/api/auth/callback/google`. nginx proxies `/api/*` to Express.
+- Deployment: `https://your-domain.example/api/auth/callback/google`. Deployment must use HTTPS and set both `BETTER_AUTH_URL` and trusted origins to the deployed origin.
+
+Google personal and Workspace accounts are accepted; no hosted-domain restriction is configured. Email/password sign-up and sign-in are disabled. Replace the dummy Google values and auth secret through local, uncommitted environment configuration before a real-provider smoke. Real Google OAuth status for task-002A: **NOT_RUN** because no developer-supplied credentials were used; automated handler tests do not prove Google or database-session behavior.
+
 ## Ordered verification
 
 Start the isolated test PostgreSQL/Redis pair first. It uses `127.0.0.1:55431`, database `mapchat_foundation_test`, `127.0.0.1:56381`, and keys under `foundation:task001:`. Integration cleanup deletes only the exact generated Redis key and rolls back its SQL fixture.
@@ -120,4 +132,4 @@ The project-local Codex `PreToolUse` guard and harmless fixtures live under `.co
 
 ## CI and current limits
 
-PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Google OAuth/provider verification, auth fixtures, maps, room/message HTTP behavior, rate limits, deployment, and cost research are outside this data task.
+PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Automated checks cover the auth configuration and unauthenticated handler boundary only; real Google OAuth, authenticated persistence/logout, auth fixtures, maps, room/message HTTP behavior, rate limits, deployment, and cost research remain outside this task.
