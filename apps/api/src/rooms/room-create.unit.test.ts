@@ -4,6 +4,7 @@ import request from "supertest";
 import { ZodError } from "zod";
 import { createApp } from "../app.js";
 import type { WriteRateLimiter } from "../rate-limit/index.js";
+import type { RoomEventPublisher } from "./events.js";
 import {
   createPrismaRoomCreateRepository,
   type RoomCreateRecord,
@@ -32,7 +33,11 @@ const responseRoom = {
   clientRequestId
 };
 
-function createTestApp(roomCreation: RoomCreateService, authenticated = true) {
+function createTestApp(
+  roomCreation: RoomCreateService,
+  authenticated = true,
+  roomEvents?: RoomEventPublisher
+) {
   return createApp({
     auth: {
       handler: (_request, response) => response.sendStatus(500),
@@ -41,7 +46,8 @@ function createTestApp(roomCreation: RoomCreateService, authenticated = true) {
     probes: { postgres: async () => true, redis: async () => true },
     readinessTimeoutMs: 50,
     rooms: { listPublicRooms: async () => [] },
-    roomCreation
+    roomCreation,
+    ...(roomEvents ? { roomEvents } : {})
   });
 }
 
@@ -90,6 +96,38 @@ describe("room create contracts and HTTP route", () => {
     expect(createRoom).toHaveBeenCalledWith(creatorId, {
       latitude: 44.4268, longitude: 26.1025, clientRequestId
     });
+  });
+
+  it("publishes one strict room.created payload only for a newly created room", async () => {
+    const publishRoomCreated = jest.fn();
+    const roomEvents = { publishRoomCreated };
+    const createRoom = jest.fn(async () => ({ status: "created", room: responseRoom } as const));
+    await request(createTestApp({ createRoom }, true, roomEvents))
+      .post("/api/rooms")
+      .send({ latitude: 44.4268, longitude: 26.1025, clientRequestId })
+      .expect(201, responseRoom);
+
+    expect(publishRoomCreated).toHaveBeenCalledTimes(1);
+    expect(publishRoomCreated).toHaveBeenCalledWith({
+      room: {
+        id: record.id,
+        title: record.title,
+        latitude: record.latitude,
+        longitude: record.longitude,
+        createdAt: createdAt.toISOString()
+      },
+      clientRequestId
+    });
+    expect(JSON.stringify(publishRoomCreated.mock.calls[0]?.[0])).not.toMatch(/creator|email|session/i);
+
+    publishRoomCreated.mockClear();
+    await request(createTestApp({
+      createRoom: jest.fn(async () => ({ status: "replayed", room: responseRoom } as const))
+    }, true, roomEvents))
+      .post("/api/rooms")
+      .send({ latitude: 44.4268, longitude: 26.1025, clientRequestId })
+      .expect(200, responseRoom);
+    expect(publishRoomCreated).not.toHaveBeenCalled();
   });
 
   it("maps conflict, rate limiting, and limiter outage to stable errors", async () => {

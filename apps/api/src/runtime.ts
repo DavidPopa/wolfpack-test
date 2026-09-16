@@ -7,6 +7,7 @@ import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
 import { createWriteRateLimiter, type AtomicRateLimitRedis } from "./rate-limit/index.js";
+import { createSocketRoomEventPublisher } from "./rooms/events.js";
 import { createPrismaRoomCreateRepository, createPrismaRoomReadRepository } from "./rooms/repository.js";
 import { createRoomCreateService, createRoomListService } from "./rooms/service.js";
 import { createAppServer, type RunningServer } from "./server.js";
@@ -78,6 +79,7 @@ export async function startApi(
     redis.on("error", () => undefined);
     await redis.connect();
     const auth = await dependencies.createAuthBoundary(prisma, config.auth);
+    const roomEvents = createSocketRoomEventPublisher();
     const app = createApp({
       auth,
       probes: createProbeDependencies(pool, redis),
@@ -86,9 +88,11 @@ export async function startApi(
       roomCreation: createRoomCreateService(
         createPrismaRoomCreateRepository(prisma),
         createWriteRateLimiter(redis, config.rateLimit)
-      )
+      ),
+      roomEvents
     });
     server = dependencies.createServer(app);
+    roomEvents.bind(server.io);
     const port = await server.listen(config.port);
     return { port, shutdown };
   } catch (startupError) {

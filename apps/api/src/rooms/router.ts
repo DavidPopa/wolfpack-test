@@ -1,4 +1,5 @@
 import {
+  publicRoomSchema,
   roomCreateConflictResponseSchema,
   roomCreateInvalidResponseSchema,
   roomCreateRateLimitedResponseSchema,
@@ -8,12 +9,14 @@ import {
 } from "@map-chat/contracts";
 import { Router } from "express";
 import type { SessionResolver } from "../auth.js";
+import type { RoomEventPublisher } from "./events.js";
 import type { RoomCreateService, RoomListService } from "./service.js";
 
 export function createRoomsRouter(
   listService: RoomListService,
   createService: RoomCreateService,
-  resolveIdentity: SessionResolver
+  resolveIdentity: SessionResolver,
+  roomEvents: RoomEventPublisher
 ): Router {
   const router = Router();
   router.get("/", async (_request, response) => {
@@ -38,6 +41,18 @@ export function createRoomsRouter(
 
     const result = await createService.createRoom(identity.userId, parsedRequest.data);
     if (result.status === "created" || result.status === "replayed") {
+      if (result.status === "created") {
+        roomEvents.publishRoomCreated({
+          room: publicRoomSchema.parse({
+            id: result.room.id,
+            title: result.room.title,
+            latitude: result.room.latitude,
+            longitude: result.room.longitude,
+            createdAt: result.room.createdAt
+          }),
+          clientRequestId: result.room.clientRequestId
+        });
+      }
       response.status(result.status === "created" ? 201 : 200).json(result.room);
       return;
     }

@@ -112,15 +112,7 @@ describe("POST /api/rooms with PostgreSQL and Redis", () => {
       .send({ latitude: 44, longitude: 26, clientRequestId, creatorId: userId })
       .expect(400, { error: { code: "INVALID_ROOM_REQUEST", message: "Invalid room request" } });
 
-    const app = appFor(userId);
-    const server = createAppServer(app);
-    const observableIo = server.io as unknown as { emit: (event: string, ...arguments_: unknown[]) => unknown };
-    const originalEmit = observableIo.emit.bind(server.io);
-    let productBroadcastCount = 0;
-    observableIo.emit = (event, ...arguments_) => {
-      if (event === "room.created") productBroadcastCount += 1;
-      return originalEmit(event, ...arguments_);
-    };
+    const server = createAppServer(appFor(userId));
     try {
       const createResponse = await request(server.httpServer).post("/api/rooms")
         .send({ latitude: -0, longitude: 26.102512345, clientRequestId })
@@ -137,7 +129,6 @@ describe("POST /api/rooms with PostgreSQL and Redis", () => {
       expect(Object.keys(createResponse.body).sort()).toEqual([
         "clientRequestId", "createdAt", "id", "latitude", "longitude", "title"
       ]);
-      expect(productBroadcastCount).toBe(0);
       const persisted = await prisma.room.findUniqueOrThrow({ where: { id: createResponse.body.id as string } });
       expect(persisted).toMatchObject({
         creatorId: userId,

@@ -2,6 +2,7 @@ import { healthResponseSchema, notFoundResponseSchema, readinessResponseSchema }
 import express, { type Express } from "express";
 import type { AuthBoundary, SessionResolver } from "./auth.js";
 import { checkReadiness, type ProbeDependencies } from "./readiness.js";
+import { disabledRoomEventPublisher, type RoomEventPublisher } from "./rooms/events.js";
 import { createRoomsRouter } from "./rooms/router.js";
 import type { RoomCreateService, RoomListService } from "./rooms/service.js";
 
@@ -11,6 +12,7 @@ export interface AppOptions {
   readinessTimeoutMs: number;
   rooms: RoomListService;
   roomCreation: RoomCreateService;
+  roomEvents?: RoomEventPublisher;
 }
 
 export type ApiApplication = Express & { readonly resolveIdentity: SessionResolver };
@@ -26,7 +28,12 @@ export function createApp(options: AppOptions): ApiApplication {
   app.disable("x-powered-by");
   app.all("/api/auth/*splat", options.auth.handler);
   app.use(express.json());
-  app.use("/api/rooms", createRoomsRouter(options.rooms, options.roomCreation, options.auth.resolveIdentity));
+  app.use("/api/rooms", createRoomsRouter(
+    options.rooms,
+    options.roomCreation,
+    options.auth.resolveIdentity,
+    options.roomEvents ?? disabledRoomEventPublisher
+  ));
   app.get("/api/health", (_request, response) => {
     response.status(200).json(healthResponseSchema.parse({ status: "ok", service: "api" }));
   });

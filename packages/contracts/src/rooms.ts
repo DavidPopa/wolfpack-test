@@ -59,8 +59,14 @@ export const roomCreateErrorResponseSchema = z.union([
   roomCreateUnavailableResponseSchema
 ]);
 
+export const roomCreatedEventPayloadSchema = z.object({
+  room: publicRoomSchema,
+  clientRequestId: z.string().uuid()
+}).strict();
+
 export type PublicRoom = z.infer<typeof publicRoomSchema>;
 export type RoomListResponse = z.infer<typeof roomListResponseSchema>;
 export type RoomCreateRequest = z.infer<typeof roomCreateRequestSchema>;
 export type RoomCreateResponse = z.infer<typeof roomCreateResponseSchema>;
 export type RoomCreateErrorResponse = z.infer<typeof roomCreateErrorResponseSchema>;
+export type RoomCreatedEventPayload = z.infer<typeof roomCreatedEventPayloadSchema>;

@@ -10,6 +10,7 @@ export {
   roomCreateResponseSchema,
   roomCreateUnauthorizedResponseSchema,
   roomCreateUnavailableResponseSchema,
+  roomCreatedEventPayloadSchema,
   roomListResponseSchema
 } from "./rooms.js";
 export type {
@@ -17,5 +18,6 @@ export type {
   RoomCreateErrorResponse,
   RoomCreateRequest,
   RoomCreateResponse,
+  RoomCreatedEventPayload,
   RoomListResponse
 } from "./rooms.js";
