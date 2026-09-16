@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  '@parcel/watcher': true # Tailwind file-watcher native binding.
+  '@prisma/client': true # Pinned client postinstall; generation remains intentionally deferred.
+  '@prisma/engines': true # Pinned Prisma CLI engine installer.
+  '@swc/core': true # Jest/Next native TypeScript transform.
+  esbuild: true # Pinned tsx development executor transform.
+  prisma: true # Pinned Prisma CLI lifecycle setup.
+  unrs-resolver: true # ESLint resolver native binding.
+
+minimumReleaseAgeExclude:
+  - '@tanstack/query-core@5.103.0'
+  - '@tanstack/react-query@5.103.0'
+  - '@types/node@24.13.5'

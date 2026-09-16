@@ -1,0 +1,18 @@
+{
+  "description": "Repository guardrails for agent tool calls; fixtures verify this policy, but activation still requires Codex trust.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env node \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking repository safety policy"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,10 +1,10 @@
 # Testing
 
-Commands below are the foundation's proposed contract, not installed or executed tooling. Record actual commands/versions once implemented; update callers if names change.
+These commands are the implemented foundation contract. They cover infrastructure scaffolding only; later product tasks must add auth, map, room, message, rate-limit, pagination, optimistic-state and reconnect coverage.
 
 ## Ordered gates
 
-| Order | Intended command | Checks |
+| Order | Command | Foundation checks |
 | --- | --- | --- |
 | 1 | `pnpm lint` | ESLint, check-only |
 | 2 | `pnpm typecheck` | TypeScript |
@@ -14,14 +14,14 @@ Commands below are the foundation's proposed contract, not installed or executed
 | 5 | `pnpm build` | Production API/web/shared builds |
 | 6 | `pnpm test:e2e` | Playwright Chromium through the production proxy |
 
-Resolve a failed gate before proceeding. Focused development checks do not replace handoff gates. Husky runs gates 1–4; PR CI and final integrated verification run all gates. Docs-only changes may use justified N/A; missing required feature tests are not N/A.
+Run `pnpm services:test:up`, `pnpm db:validate`, and `pnpm exec playwright install chromium` before the ordered gates. Resolve a failed gate before proceeding. Focused checks do not replace handoff gates. Husky runs gates 1–4; PR CI runs every gate plus `pnpm test:tooling` and the actual `pnpm hooks:check` entrypoint. Stop owned services with `pnpm stack:stop` and `pnpm services:test:stop`; both preserve data/volumes.
 
 ## Test design
 
-- **Backend:** explicitly collect unit and integration suites. Real integration tests cover migrations/constraints, forged or missing identity, invalid inputs, concurrent identical/conflicting retries, stable pagination, Redis rate-limit expiry/outage and persistence-before-event behavior.
-- **Frontend:** use semantic queries and realistic interactions; await observable results rather than sleeps. Reset query clients/handlers between tests. Cover pending/success/failure/retry, targeted rollback with concurrent updates, event/HTTP order, duplicate events, stale selection/history and failed draft preservation.
-- **Chromium:** run the production app through its proxy with known readiness and isolated resources; do not silently reuse an unrelated dev server. Exercise real map click/drag/marker selection, reload persistence, mobile/keyboard flows, and two independent contexts for room isolation, delivery and reconnect across multiple history pages.
-- **Auth:** automated fixture sessions test app behavior, not Google integration. Record real Google login/logout/session persistence separately; missing provider access is BLOCKED. Fixtures must not bypass production auth.
+- **Backend foundation:** unit tests cover config redaction, public health, bounded aggregated readiness and JSON 404. Real isolated integration tests cover a rolled-back SQL roundtrip, a namespaced Redis value/expiry/cleanup, and Socket.IO polling/WebSocket clients.
+- **Frontend foundation:** RTL uses a fresh QueryClient, semantic queries and realistic keyboard interaction for loading, success, error and retry.
+- **Chromium foundation:** Playwright runs only against `127.0.0.1:8081` after the owned production stack is healthy; it covers the page/control state, API, proxy JSON 404 and both Socket.IO transports.
+- **Later product coverage:** auth, Google-provider behavior, map interactions, writes, domain migrations/constraints, pagination, optimistic reconciliation, rates and reconnect recovery remain outside this task and are not claimed.
 - Mock only appropriate boundaries. Component/map mocks are not browser or transport proof. Put unsupported async server-component behavior into E2E; keep regression checks capable of failing on the original bug.
 
 ## Evidence and safety

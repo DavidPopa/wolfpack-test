@@ -19,9 +19,3 @@ Dependencies / base: <values>
 - [ ] Production build and Chromium E2E
 - [ ] Relevant manual checks, with real OAuth separate from fixtures
 - [ ] Scope and written review checked by the orchestrator
-
-## Risks and setup
-
-<!-- Environment/migration requirements without secrets, known limitations, deferred findings with reasons, and integration checks still required. -->
-
-The developer commits and pushes, or explicitly authorizes the orchestrator to perform a specific reviewed commit/push. Execution agents never do so. PR publication and merge remain developer-owned unless separately authorized. Local success does not establish PR CI success.

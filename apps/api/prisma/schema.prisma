@@ -1,0 +1,5 @@
+datasource db {
+  provider = "postgresql"
+}
+
+// Foundation only: domain models and migrations are intentionally deferred.
