@@ -24,7 +24,8 @@ describe("GET /api/rooms with PostgreSQL", () => {
     },
     probes: { postgres: async () => true, redis: async () => true },
     readinessTimeoutMs: 100,
-    rooms: createRoomListService(createPrismaRoomReadRepository(prisma))
+    rooms: createRoomListService(createPrismaRoomReadRepository(prisma)),
+    roomCreation: { createRoom: async () => ({ status: "unavailable" }) }
   });
 
   beforeAll(async () => prisma.$connect());

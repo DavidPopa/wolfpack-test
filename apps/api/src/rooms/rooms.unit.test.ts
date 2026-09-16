@@ -41,7 +41,8 @@ describe("public room listing", () => {
       },
       probes: { postgres: async () => true, redis: async () => true },
       readinessTimeoutMs: 50,
-      rooms: { listPublicRooms }
+      rooms: { listPublicRooms },
+      roomCreation: { createRoom: async () => ({ status: "unavailable" }) }
     });
 
     await request(app).get("/api/rooms").expect(200, [{

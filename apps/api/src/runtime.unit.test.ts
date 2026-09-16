@@ -26,13 +26,18 @@ it("creates one Prisma client from the validated URL and disconnects it on shutd
   const prisma: RuntimePrismaClient = {
     $connect: jest.fn(async () => undefined),
     $disconnect: jest.fn(async () => undefined),
-    room: { findMany: jest.fn(async () => []) }
+    room: {
+      findMany: jest.fn(async () => []),
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async () => { throw new Error("not called"); })
+    }
   };
   let redisOpen = false;
   const redis: RuntimeRedis = {
     get isOpen() { return redisOpen; },
     on: jest.fn(),
     connect: jest.fn(async () => { redisOpen = true; }),
+    eval: jest.fn(async () => [1, 60_000]),
     ping: jest.fn(async () => "PONG"),
     quit: jest.fn(async () => { redisOpen = false; })
   };
@@ -86,13 +91,18 @@ it("closes every acquired resource when the configured port is occupied", async 
   const prisma: RuntimePrismaClient = {
     $connect: jest.fn(async () => undefined),
     $disconnect: jest.fn(async () => undefined),
-    room: { findMany: jest.fn(async () => []) }
+    room: {
+      findMany: jest.fn(async () => []),
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async () => { throw new Error("not called"); })
+    }
   };
   let redisOpen = false;
   const redis: RuntimeRedis = {
     get isOpen() { return redisOpen; },
     on: jest.fn(),
     connect: jest.fn(async () => { redisOpen = true; }),
+    eval: jest.fn(async () => [1, 60_000]),
     ping: jest.fn(async () => "PONG"),
     quit: jest.fn(async () => { redisOpen = false; })
   };

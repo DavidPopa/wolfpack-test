@@ -6,8 +6,9 @@ import { createAuthBoundary, type AuthBoundary } from "./auth.js";
 import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
-import { createPrismaRoomReadRepository } from "./rooms/repository.js";
-import { createRoomListService } from "./rooms/service.js";
+import { createWriteRateLimiter, type AtomicRateLimitRedis } from "./rate-limit/index.js";
+import { createPrismaRoomCreateRepository, createPrismaRoomReadRepository } from "./rooms/repository.js";
+import { createRoomCreateService, createRoomListService } from "./rooms/service.js";
 import { createAppServer, type RunningServer } from "./server.js";
 
 export interface RuntimePool {
@@ -15,7 +16,7 @@ export interface RuntimePool {
   end: () => Promise<void>;
 }
 
-export interface RuntimeRedis {
+export interface RuntimeRedis extends AtomicRateLimitRedis {
   readonly isOpen: boolean;
   on: (event: "error", listener: (error: Error) => void) => unknown;
   connect: () => Promise<unknown>;
@@ -81,7 +82,11 @@ export async function startApi(
       auth,
       probes: createProbeDependencies(pool, redis),
       readinessTimeoutMs: config.readinessTimeoutMs,
-      rooms: createRoomListService(createPrismaRoomReadRepository(prisma))
+      rooms: createRoomListService(createPrismaRoomReadRepository(prisma)),
+      roomCreation: createRoomCreateService(
+        createPrismaRoomCreateRepository(prisma),
+        createWriteRateLimiter(redis, config.rateLimit)
+      )
     });
     server = dependencies.createServer(app);
     const port = await server.listen(config.port);

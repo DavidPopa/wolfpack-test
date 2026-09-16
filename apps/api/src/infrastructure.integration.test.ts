@@ -13,6 +13,7 @@ const keyPrefix = process.env.TEST_REDIS_KEY_PREFIX;
 const unusedAuthHandler: RequestHandler = (_request, response) => { response.sendStatus(500); };
 const unusedAuth: AuthBoundary = { handler: unusedAuthHandler, resolveIdentity: async () => null };
 const unusedRooms = { listPublicRooms: async () => [] };
+const unavailableRoomCreation = { createRoom: async () => ({ status: "unavailable" } as const) };
 if (!databaseUrl || !redisUrl || !keyPrefix?.startsWith("foundation:task001:")) {
   throw new Error("TEST_DATABASE_URL, TEST_REDIS_URL, and an isolated foundation:task001: key prefix are required");
 }
@@ -54,7 +55,8 @@ describe("real infrastructure", () => {
       auth: unusedAuth,
       probes: { postgres: async () => true, redis: async () => true },
       readinessTimeoutMs: 100,
-      rooms: unusedRooms
+      rooms: unusedRooms,
+      roomCreation: unavailableRoomCreation
     }));
     const port = await server.listen(0, "127.0.0.1");
     let socket: Socket | undefined;

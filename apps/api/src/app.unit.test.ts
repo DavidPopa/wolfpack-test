@@ -5,6 +5,7 @@ import { createApp } from "./app.js";
 
 const passingProbes = { postgres: async () => true, redis: async () => true };
 const emptyRooms = { listPublicRooms: async () => [] };
+const unavailableRoomCreation = { createRoom: async () => ({ status: "unavailable" } as const) };
 const unavailableAuthHandler: RequestHandler = (_request, response) => {
   response.status(503).json({ error: { code: "AUTH_TEST_HANDLER", message: "Test handler only" } });
 };
@@ -14,7 +15,7 @@ function createTestAuth(handler: RequestHandler = unavailableAuthHandler): AuthB
 }
 
 function createTestApp(authHandler: RequestHandler = unavailableAuthHandler) {
-  return createApp({ auth: createTestAuth(authHandler), probes: passingProbes, readinessTimeoutMs: 50, rooms: emptyRooms });
+  return createApp({ auth: createTestAuth(authHandler), probes: passingProbes, readinessTimeoutMs: 50, rooms: emptyRooms, roomCreation: unavailableRoomCreation });
 }
 
 describe("infrastructure routes", () => {
@@ -23,7 +24,8 @@ describe("infrastructure routes", () => {
       auth: createTestAuth(),
       probes: { postgres: async () => Promise.reject(), redis: async () => Promise.reject() },
       readinessTimeoutMs: 50,
-      rooms: emptyRooms
+      rooms: emptyRooms,
+      roomCreation: unavailableRoomCreation
     });
     await request(app).get("/api/health").expect(200, { status: "ok", service: "api" });
   });
@@ -37,7 +39,8 @@ describe("infrastructure routes", () => {
       auth: createTestAuth(),
       probes: { postgres: async () => new Promise(() => undefined), redis: async () => true },
       readinessTimeoutMs: 50,
-      rooms: emptyRooms
+      rooms: emptyRooms,
+      roomCreation: unavailableRoomCreation
     });
     const started = Date.now();
     const response = await request(app).get("/api/ready").expect(503);
@@ -71,7 +74,8 @@ describe("infrastructure routes", () => {
       auth: { handler: unavailableAuthHandler, resolveIdentity },
       probes: passingProbes,
       readinessTimeoutMs: 50,
-      rooms: emptyRooms
+      rooms: emptyRooms,
+      roomCreation: unavailableRoomCreation
     });
 
     await expect(app.resolveIdentity({ headers: { cookie: "fixture-cookie" } })).resolves.toEqual({
@@ -85,7 +89,8 @@ describe("infrastructure routes", () => {
       auth: { handler: unavailableAuthHandler, resolveIdentity },
       probes: passingProbes,
       readinessTimeoutMs: 50,
-      rooms: emptyRooms
+      rooms: emptyRooms,
+      roomCreation: unavailableRoomCreation
     });
 
     await request(app)
