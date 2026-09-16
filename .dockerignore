@@ -1,0 +1,13 @@
+.git
+.runtime
+node_modules
+**/node_modules
+**/.next
+**/dist
+coverage
+test-results
+playwright-report
+SPRINTS
+*.log
+.env*
+!.env.example

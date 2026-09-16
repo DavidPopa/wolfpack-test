@@ -36,6 +36,10 @@ In the fresh session, use `/skills` or the skill selector to check discovery. If
 
 ## Hooks and review
 
-Executable hooks are not installed yet. The foundation task in the local [sprint workspace](../SPRINTS/README.md) contains Husky and minimal Codex guard requirements, including validation before activation. It remains a draft until assigned and approved. No copied legacy `hooks.json`, broad MCP pack or automatic subagent configuration is active.
+The foundation supplies one project-local [hooks.json](hooks.json) and one `PreToolUse` handler. It checks inspectable `Bash` and `apply_patch` commands without executing them and denies agent commits, recognized destructive Git/database/Redis/volume operations, and writes to real `.env*` files while allowing dummy example files and legitimate reads. Harmless fixtures run through `pnpm test:tooling`.
+
+Per the [official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks), project hooks load only for a trusted `.codex/` layer, changed definitions require review again, and a supported denial returns `hookSpecificOutput` with `hookEventName: "PreToolUse"` and `permissionDecision: "deny"`. Use `/hooks` as the developer to inspect and trust the exact current definition. This implementation does not silently alter trust, user configuration, or model selection.
+
+Fixture success proves parser behavior, not live route coverage or trust. Shell indirection, encoded commands, unrecognized tools, external programs that mutate state internally, and races outside `PreToolUse` can evade a small pattern guard; sandboxing, approval policy, repository authority rules and human review remain necessary. Live tool-route proof requires developer participation in the existing session and is recorded separately as `NOT_RUN` or `BLOCKED` when unavailable.
 
 The developer supplies QA and review instructions as separate stages after implementation, in the same session or a fresh one. For final assessment review, use `review` on integrated code and final QA evidence with [REVIEW](../docs/templates/REVIEW.md). Do not fix code during a review-only stage. The orchestrator verifies the report and actual diff afterward.

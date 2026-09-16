@@ -1,0 +1,47 @@
+{
+  "name": "map-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": "24.21.0",
+    "pnpm": "11.24.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @map-chat/contracts build && node scripts/check-test-services.mjs && concurrently -k -n api,web \"PORT=${PORT:-4000} DATABASE_URL=${DATABASE_URL:-postgresql://mapchat_test:mapchat_test@127.0.0.1:55431/mapchat_foundation_test} REDIS_URL=${REDIS_URL:-redis://127.0.0.1:56381} READINESS_TIMEOUT_MS=${READINESS_TIMEOUT_MS:-1000} pnpm --filter @map-chat/api dev\" \"DEV_API_ORIGIN=http://127.0.0.1:${PORT:-4000} WEB_PORT=${WEB_PORT:-3000} pnpm --filter @map-chat/web dev\"",
+    "services:test:up": "docker compose -p mapchat-foundation-001-test -f compose.test.yaml up -d --wait",
+    "services:test:stop": "docker compose -p mapchat-foundation-001-test -f compose.test.yaml stop",
+    "db:validate": "TEST_DATABASE_URL=postgresql://mapchat_test:mapchat_test@127.0.0.1:55431/mapchat_foundation_test prisma validate --config apps/api/prisma.config.ts",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "pnpm --filter @map-chat/contracts typecheck && pnpm --filter @map-chat/contracts build && pnpm --filter @map-chat/api typecheck && pnpm --filter @map-chat/web typecheck",
+    "test:api:unit": "pnpm --filter @map-chat/api test:unit",
+    "test:api:integration": "node scripts/check-test-services.mjs && TEST_DATABASE_URL=postgresql://mapchat_test:mapchat_test@127.0.0.1:55431/mapchat_foundation_test TEST_REDIS_URL=redis://127.0.0.1:56381 TEST_REDIS_KEY_PREFIX=foundation:task001:local: pnpm --filter @map-chat/api test:integration",
+    "test:web": "pnpm --filter @map-chat/web test",
+    "build": "pnpm --filter @map-chat/contracts build && pnpm --filter @map-chat/api build && pnpm --filter @map-chat/web build",
+    "stack:up": "docker compose -p mapchat-foundation-001 up -d --build --wait",
+    "stack:stop": "docker compose -p mapchat-foundation-001 stop",
+    "test:e2e": "playwright test",
+    "test:tooling": "node --test tests/tooling/*.test.mjs",
+    "hooks:check": "sh scripts/hooks-check.sh",
+    "hooks:install": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.63.0",
+    "@swc/core": "1.16.2",
+    "@swc/jest": "0.2.39",
+    "@types/jest": "30.0.0",
+    "@types/node": "24.13.5",
+    "concurrently": "9.2.4",
+    "eslint": "9.39.5",
+    "globals": "16.5.0",
+    "husky": "9.1.7",
+    "jest": "30.5.1",
+    "jest-environment-jsdom": "30.5.1",
+    "prisma": "7.10.0",
+    "socket.io-client": "4.8.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

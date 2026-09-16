@@ -1,0 +1,28 @@
+services:
+  postgres-test:
+    image: postgres:17.8-bookworm@sha256:45e40832755b7133da62e701ee496d65afc5e4527c8ff5446c2f3bdd11bc58e3
+    environment:
+      POSTGRES_USER: mapchat_test
+      POSTGRES_PASSWORD: mapchat_test
+      POSTGRES_DB: mapchat_foundation_test
+    ports:
+      - "127.0.0.1:55431:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapchat_test -d mapchat_foundation_test"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+
+  redis-test:
+    image: redis:7.4.11-bookworm@sha256:71da9275c5f3fcb97d0fa0c8c5b36cc995327265420f17a04bfd544f458059f7
+    ports:
+      - "127.0.0.1:56381:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30

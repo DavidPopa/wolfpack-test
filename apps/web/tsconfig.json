@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2017", "lib": ["dom", "dom.iterable", "ES2023"], "allowJs": false,
+    "incremental": true, "module": "esnext", "moduleResolution": "bundler", "jsx": "preserve",
+    "noEmit": true, "isolatedModules": true, "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }, "types": ["jest", "node"]
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
