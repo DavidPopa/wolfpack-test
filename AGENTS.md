@@ -5,7 +5,7 @@
 - Follow the developer's current instructions. The [PRD](docs/PRD.md) defines product intent; actual code, tests and command output establish what works. Report disagreements instead of changing scope.
 - Only the human developer commits, including temporary commits and amend. Do not stage, push, merge, rebase, cherry-pick, publish a PR or change Git configuration without explicit assignment; committing remains human-only.
 - The orchestrator plans, writes task/configuration documentation and reviews evidence and actual changes. It does not implement application/tooling code or start agents.
-- The developer starts fresh GPT-5.6 Sol/medium terminal agents. No subagents, background agent sessions or automatic model changes. The orchestrator remains Astra/high.
+- The developer starts fresh GPT-5.6 Sol/medium terminal agents. No subagents, background agent sessions or automatic model changes. The orchestrator currently uses GPT-5.6 Sol/high; the developer may switch it to Astra/high for unusually difficult review or reasoning work.
 - Preserve pre-existing changes. Do not reset/stash user work, reset databases, remove volumes, bypass hooks or weaken checks. Report missing authority, dependencies or credentials precisely.
 - Do not expose credentials, cookies, OAuth tokens, real environment values or session files in reports. Dummy environment examples are allowed.
 
@@ -17,11 +17,15 @@ Canonical skills live in `.codex/skills/`; `.agents/skills/` contains discovery 
 
 | Work | Skill |
 | --- | --- |
-| Prepare a bounded task and evidence requirements | `plan-task` |
+| Create or refine a sprint phase | `create-sprint` |
+| Create one bounded task and its evidence requirements | `create-task` |
+| Load and validate an approved sprint/task packet | `sprint` |
 | Implement an assigned task | `execute-task` |
 | Verify behavior and record evidence | `qa` |
 | Review a diff or final integrated project | `review` |
 | Investigate a failure or race | `debug` |
+| Recover after repeated failed approaches or unclear next steps | `when-stuck` |
+| Refine a rough Romanian/English instruction into an English agent prompt | `prompt-refiner` |
 
 Skills do not grant broader authority. Diagnosis, QA and review-only requests do not authorize code fixes. Do not import additional rules from the source projects during normal execution.
 

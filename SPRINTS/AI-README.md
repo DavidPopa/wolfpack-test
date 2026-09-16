@@ -9,7 +9,7 @@ This supplements [AGENTS.md](../AGENTS.md). An approved implementation task auth
 3. The exact assigned task and every item in its `context_must_read`.
 4. The applicable skill under `.codex/skills/` and relevant engineering/testing sections.
 
-Use `plan-task` for authoring, `execute-task` for authorized implementation, `qa` for verification, `review` for findings, and `debug` when investigating failures. There is no separate automatic sprint executor.
+Use `create-sprint` to plan a phase, `create-task` to author one bounded task, `sprint` to load and validate one approved packet, `execute-task` for authorized implementation, `qa` for verification, `review` for findings, and `debug` when investigating failures. Use `when-stuck` after repeated failed approaches and `prompt-refiner` when a rough instruction needs an English agent-ready form. There is no automatic sprint executor.
 
 ## Preflight and boundaries
 
