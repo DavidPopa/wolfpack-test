@@ -1,6 +1,6 @@
 # SPRINTS
 
-Local planning and execution workspace, adapted from `dragoon-matrix/SPRINTS`. The layout keeps the source project's sprint board, scope map, plan approval and closeout, with separate task/QA/review documents for our manual-agent workflow.
+Local planning and execution workspace for sprint boards, scope maps, plan approval, closeout, and separate task, QA, and review documents used by the manual-agent workflow.
 
 ## Structure
 
