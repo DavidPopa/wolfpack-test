@@ -1,4 +1,8 @@
 import { z } from "zod";
+import type { WriteRateLimitConfig } from "./rate-limit/index.js";
+
+const boundedRateLimitInteger = (maximum: number, fallback: number) =>
+  z.coerce.number().int().min(1).max(maximum).default(fallback);
 
 const configSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535),
@@ -9,7 +13,12 @@ const configSchema = z.object({
   BETTER_AUTH_URL: z.string().min(1),
   BETTER_AUTH_TRUSTED_ORIGINS: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().min(1).refine((value) => value === value.trim()),
-  GOOGLE_CLIENT_SECRET: z.string().min(1).refine((value) => value === value.trim())
+  GOOGLE_CLIENT_SECRET: z.string().min(1).refine((value) => value === value.trim()),
+  RATE_LIMIT_KEY_PREFIX: z.string().min(1).max(64).regex(/^[a-z0-9:_-]+$/).default("mapchat:write"),
+  ROOM_RATE_LIMIT_MAX: boundedRateLimitInteger(1000, 5),
+  ROOM_RATE_LIMIT_WINDOW_SECONDS: boundedRateLimitInteger(3600, 60),
+  MESSAGE_RATE_LIMIT_MAX: boundedRateLimitInteger(1000, 30),
+  MESSAGE_RATE_LIMIT_WINDOW_SECONDS: boundedRateLimitInteger(3600, 60)
 });
 
 export interface AuthConfig {
@@ -26,6 +35,7 @@ export interface AppConfig {
   redisUrl: string;
   readinessTimeoutMs: number;
   auth: AuthConfig;
+  rateLimit: WriteRateLimitConfig;
 }
 
 function parseCanonicalOrigin(value: string, field: string): string {
@@ -78,6 +88,19 @@ export function loadConfig(environment: NodeJS.ProcessEnv): AppConfig {
       trustedOrigins,
       googleClientId: parsed.data.GOOGLE_CLIENT_ID,
       googleClientSecret: parsed.data.GOOGLE_CLIENT_SECRET
+    },
+    rateLimit: {
+      keyPrefix: parsed.data.RATE_LIMIT_KEY_PREFIX,
+      policies: {
+        room: {
+          limit: parsed.data.ROOM_RATE_LIMIT_MAX,
+          windowSeconds: parsed.data.ROOM_RATE_LIMIT_WINDOW_SECONDS
+        },
+        message: {
+          limit: parsed.data.MESSAGE_RATE_LIMIT_MAX,
+          windowSeconds: parsed.data.MESSAGE_RATE_LIMIT_WINDOW_SECONDS
+        }
+      }
     }
   };
 }

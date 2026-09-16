@@ -22,8 +22,42 @@ describe("loadConfig", () => {
         trustedOrigins: ["http://127.0.0.1:8081", "http://127.0.0.1:3000"],
         googleClientId: valid.GOOGLE_CLIENT_ID,
         googleClientSecret: valid.GOOGLE_CLIENT_SECRET
+      },
+      rateLimit: {
+        keyPrefix: "mapchat:write",
+        policies: {
+          room: { limit: 5, windowSeconds: 60 },
+          message: { limit: 30, windowSeconds: 60 }
+        }
       }
     });
+  });
+  it("parses explicit bounded rate-limit settings", () => {
+    expect(loadConfig({
+      ...valid,
+      RATE_LIMIT_KEY_PREFIX: "mapchat_test:write-2",
+      ROOM_RATE_LIMIT_MAX: "1000",
+      ROOM_RATE_LIMIT_WINDOW_SECONDS: "3600",
+      MESSAGE_RATE_LIMIT_MAX: "1",
+      MESSAGE_RATE_LIMIT_WINDOW_SECONDS: "1"
+    }).rateLimit).toEqual({
+      keyPrefix: "mapchat_test:write-2",
+      policies: {
+        room: { limit: 1000, windowSeconds: 3600 },
+        message: { limit: 1, windowSeconds: 1 }
+      }
+    });
+  });
+  it.each([
+    ["RATE_LIMIT_KEY_PREFIX", "Uppercase"],
+    ["RATE_LIMIT_KEY_PREFIX", "a".repeat(65)],
+    ["ROOM_RATE_LIMIT_MAX", "0"],
+    ["ROOM_RATE_LIMIT_MAX", "1001"],
+    ["ROOM_RATE_LIMIT_WINDOW_SECONDS", "3601"],
+    ["MESSAGE_RATE_LIMIT_MAX", "1.5"],
+    ["MESSAGE_RATE_LIMIT_WINDOW_SECONDS", "not-a-number"]
+  ])("rejects an invalid %s rate-limit setting", (field, value) => {
+    expect(() => loadConfig({ ...valid, [field]: value })).toThrow(`Invalid startup configuration: ${field}`);
   });
   it("fails with field names but not secret values", () => {
     expect.assertions(2);
