@@ -1,7 +1,7 @@
 "use client";
 
 import type { PublicRoom } from "@map-chat/contracts";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Leaflet from "leaflet";
 import type { Map as LeafletMap, Marker } from "leaflet";
@@ -15,7 +15,14 @@ import {
   type DraftCoordinates,
   type MapSelection
 } from "@/lib/map-selection";
-import { fetchPublicRooms } from "@/lib/rooms";
+import {
+  createRoom,
+  generateRoomClientRequestId,
+  roomCreateAttemptsQueryKey,
+  RoomCreateError,
+  type RoomCreateAttempt
+} from "@/lib/room-create";
+import { fetchPublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
 import { AuthPanel } from "./auth-panel";
 import { Button } from "./ui/button";
 
@@ -40,33 +47,53 @@ function draftIcon(leaflet: LeafletModule) {
   });
 }
 
-function bindRoomMarkerKeyboard(marker: Marker, roomId: string, onRoomSelect: (roomId: string, source: SelectionSource) => void) {
+function savingIcon(leaflet: LeafletModule, selected: boolean) {
+  return leaflet.divIcon({
+    className: `saving-pin-wrapper${selected ? " saving-pin-wrapper--selected" : ""}`,
+    html: `<span class="saving-pin"><span class="saving-pin__center" aria-hidden="true"></span>${selected ? '<span class="saving-pin__selected" aria-hidden="true">…</span>' : ""}</span>`,
+    iconAnchor: [18, 36],
+    iconSize: [36, 36]
+  });
+}
+
+function sameCoordinates(left: DraftCoordinates, right: DraftCoordinates) {
+  return left.latitude === right.latitude && left.longitude === right.longitude;
+}
+
+function bindMarkerKeyboard(marker: Marker, key: string, onActivate: (source: SelectionSource) => void) {
   const element = marker.getElement();
-  if (!element || element.dataset.mapRoomKeyboardBound === "true") return;
-  element.dataset.mapRoomKeyboardBound = "true";
+  if (!element || element.dataset.mapKeyboardBound === key) return;
+  element.dataset.mapKeyboardBound = key;
   element.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     event.stopPropagation();
-    onRoomSelect(roomId, "keyboard");
+    onActivate("keyboard");
   });
 }
 
 function LeafletCanvas({
   rooms,
+  attempts,
   selection,
+  selectedAttemptId,
   onRoomSelect,
+  onAttemptSelect,
   onDraftSelect
 }: {
   rooms: PublicRoom[];
+  attempts: RoomCreateAttempt[];
   selection: MapSelection;
+  selectedAttemptId: string | null;
   onRoomSelect: (roomId: string, source: SelectionSource) => void;
+  onAttemptSelect: (clientRequestId: string, source: SelectionSource) => void;
   onDraftSelect: (coordinates: DraftCoordinates, source: SelectionSource) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef(new Map<string, Marker>());
+  const attemptMarkersRef = useRef(new Map<string, Marker>());
   const draftMarkerRef = useRef<Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [tileError, setTileError] = useState(false);
@@ -165,6 +192,7 @@ function LeafletCanvas({
       active = false;
       cleanup.forEach((dispose) => dispose());
       markersRef.current.clear();
+      attemptMarkersRef.current.clear();
       draftMarkerRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
@@ -205,7 +233,7 @@ function LeafletCanvas({
         onRoomSelect(room.id, source);
       });
       marker.addTo(map);
-      bindRoomMarkerKeyboard(marker, room.id, onRoomSelect);
+      bindMarkerKeyboard(marker, `room:${room.id}`, (source) => onRoomSelect(room.id, source));
       markersRef.current.set(room.id, marker);
     }
 
@@ -215,9 +243,54 @@ function LeafletCanvas({
         leaflet,
         selection.kind === "room" && selection.roomId === room.id
       ));
-      if (marker) bindRoomMarkerKeyboard(marker, room.id, onRoomSelect);
+      if (marker) bindMarkerKeyboard(marker, `room:${room.id}`, (source) => onRoomSelect(room.id, source));
     }
   }, [mapReady, onRoomSelect, rooms, selection]);
+
+  useEffect(() => {
+    const leaflet = leafletRef.current;
+    const map = mapRef.current;
+    if (!mapReady || !leaflet || !map) return;
+
+    const pendingAttempts = attempts.filter((attempt) => attempt.status === "pending");
+    const pendingIds = new Set(pendingAttempts.map((attempt) => attempt.clientRequestId));
+    for (const [clientRequestId, marker] of attemptMarkersRef.current) {
+      if (!pendingIds.has(clientRequestId)) {
+        marker.removeFrom(map);
+        attemptMarkersRef.current.delete(clientRequestId);
+      }
+    }
+
+    for (const attempt of pendingAttempts) {
+      const existingMarker = attemptMarkersRef.current.get(attempt.clientRequestId);
+      if (existingMarker) {
+        existingMarker.setLatLng([attempt.coordinates.latitude, attempt.coordinates.longitude]);
+        existingMarker.setIcon(savingIcon(leaflet, selectedAttemptId === attempt.clientRequestId));
+        bindMarkerKeyboard(existingMarker, `attempt:${attempt.clientRequestId}`, (source) => onAttemptSelect(attempt.clientRequestId, source));
+        continue;
+      }
+
+      const marker = leaflet.marker([attempt.coordinates.latitude, attempt.coordinates.longitude], {
+        alt: "Saving room location",
+        bubblingMouseEvents: false,
+        draggable: false,
+        icon: savingIcon(leaflet, selectedAttemptId === attempt.clientRequestId),
+        keyboard: true,
+        title: "Saving room location"
+      });
+      marker.on("click", (event) => {
+        event.originalEvent?.stopPropagation();
+        const originalEvent = event.originalEvent;
+        const source = originalEvent instanceof KeyboardEvent || (originalEvent instanceof MouseEvent && originalEvent.detail === 0)
+          ? "keyboard"
+          : "mouse";
+        onAttemptSelect(attempt.clientRequestId, source);
+      });
+      marker.addTo(map);
+      bindMarkerKeyboard(marker, `attempt:${attempt.clientRequestId}`, (source) => onAttemptSelect(attempt.clientRequestId, source));
+      attemptMarkersRef.current.set(attempt.clientRequestId, marker);
+    }
+  }, [attempts, mapReady, onAttemptSelect, selectedAttemptId]);
 
   useEffect(() => {
     const leaflet = leafletRef.current;
@@ -227,6 +300,7 @@ function LeafletCanvas({
     draftMarkerRef.current?.removeFrom(map);
     draftMarkerRef.current = null;
     if (selection.kind !== "draft") return;
+    if (attempts.some((attempt) => attempt.status === "pending" && sameCoordinates(attempt.coordinates, selection.coordinates))) return;
 
     const marker = leaflet.marker(
       [selection.coordinates.latitude, selection.coordinates.longitude],
@@ -241,7 +315,7 @@ function LeafletCanvas({
     );
     marker.addTo(map);
     draftMarkerRef.current = marker;
-  }, [mapReady, selection]);
+  }, [attempts, mapReady, selection]);
 
   return <>
     <div
@@ -256,23 +330,90 @@ function LeafletCanvas({
 
 export function RoomMap() {
   const auth = useAuthSession();
+  const queryClient = useQueryClient();
   const rooms = useQuery({
-    queryKey: ["rooms"],
+    queryKey: roomsQueryKey,
     queryFn: fetchPublicRooms,
     retry: false
   });
+  const createAttempts = useQuery<RoomCreateAttempt[]>({
+    queryKey: roomCreateAttemptsQueryKey,
+    queryFn: async () => [] as RoomCreateAttempt[],
+    initialData: [] as RoomCreateAttempt[],
+    retry: false,
+    staleTime: Infinity
+  });
   const visibleRooms = rooms.data ?? [];
   const [selection, setSelection] = useState<MapSelection>({ kind: "none" });
-  const [createIntent, setCreateIntent] = useState(false);
+  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
   const panelHeadingRef = useRef<HTMLHeadingElement>(null);
+  const selectionRef = useRef(selection);
+  const selectedAttemptIdRef = useRef(selectedAttemptId);
   const selectedRoom = useMemo(
     () => selection.kind === "room" ? visibleRooms.find((room) => room.id === selection.roomId) ?? null : null,
     [selection, visibleRooms]
   );
+  const selectedAttempt = useMemo(
+    () => selectedAttemptId ? createAttempts.data.find((attempt) => attempt.clientRequestId === selectedAttemptId) ?? null : null,
+    [createAttempts.data, selectedAttemptId]
+  );
+  const selectedAttemptMatchesDraft = selectedAttempt && selection.kind === "draft" && sameCoordinates(selectedAttempt.coordinates, selection.coordinates)
+    ? selectedAttempt
+    : null;
+
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
+
+  useEffect(() => {
+    selectedAttemptIdRef.current = selectedAttemptId;
+  }, [selectedAttemptId]);
+
+  const roomCreate = useMutation({
+    mutationFn: createRoom,
+    retry: false,
+    onSuccess(result, variables) {
+      queryClient.setQueryData(roomsQueryKey, (existing: PublicRoom[] | undefined) => upsertPublicRoom(existing, result.room));
+      queryClient.setQueryData(roomCreateAttemptsQueryKey, (existing: RoomCreateAttempt[] | undefined) =>
+        (existing ?? []).filter((attempt) => attempt.clientRequestId !== variables.clientRequestId)
+      );
+
+      const currentSelection = selectionRef.current;
+      if (
+        selectedAttemptIdRef.current === variables.clientRequestId
+        && currentSelection.kind === "draft"
+        && currentSelection.coordinates.latitude === variables.latitude
+        && currentSelection.coordinates.longitude === variables.longitude
+      ) {
+        setSelectedAttemptId(null);
+        applySelection({ kind: "room", roomId: result.room.id }, "restore");
+      } else {
+        setSelectedAttemptId((current) => current === variables.clientRequestId ? null : current);
+      }
+    },
+    onError(error, variables) {
+      const failure = error instanceof RoomCreateError
+        ? error.failure
+        : {
+          kind: "unexpected" as const,
+          message: "Room creation failed. Please try again later.",
+          retryable: false
+        };
+      queryClient.setQueryData(roomCreateAttemptsQueryKey, (existing: RoomCreateAttempt[] | undefined) =>
+        (existing ?? []).map((attempt) => attempt.clientRequestId === variables.clientRequestId
+          ? {
+            ...attempt,
+            status: "failed" as const,
+            error: failure
+          }
+          : attempt)
+      );
+    }
+  });
 
   const applySelection = useCallback((next: MapSelection, source: SelectionSource, historyMode: "push" | "none" = "push") => {
     setSelection(next);
-    setCreateIntent(false);
+    setSelectedAttemptId(null);
     if (historyMode === "push") {
       const target = urlForMapSelection(new URL(window.location.href), next);
       window.history.pushState(null, "", target);
@@ -285,7 +426,7 @@ export function RoomMap() {
     const current = new URL(window.location.href);
     const restored = readMapSelection(current, visibleRooms);
     setSelection((previous) => mapSelectionEquals(previous, restored) ? previous : restored);
-    setCreateIntent(false);
+    setSelectedAttemptId(null);
     const canonical = urlForMapSelection(current, restored);
     if (`${current.pathname}${current.search}${current.hash}` !== canonical) {
       window.history.replaceState(null, "", canonical);
@@ -308,13 +449,52 @@ export function RoomMap() {
   const selectDraft = useCallback((coordinates: DraftCoordinates, source: SelectionSource) => {
     applySelection({ kind: "draft", coordinates }, source);
   }, [applySelection]);
+  const selectAttempt = useCallback((clientRequestId: string, source: SelectionSource) => {
+    const attempt = createAttempts.data.find((candidate) => candidate.clientRequestId === clientRequestId);
+    if (!attempt) return;
+    setSelection({ kind: "draft", coordinates: attempt.coordinates });
+    setSelectedAttemptId(clientRequestId);
+    const target = urlForMapSelection(new URL(window.location.href), { kind: "draft", coordinates: attempt.coordinates });
+    window.history.pushState(null, "", target);
+    if (source === "keyboard") requestAnimationFrame(() => panelHeadingRef.current?.focus());
+  }, [createAttempts.data]);
+  const startCreateAttempt = useCallback((mode: "create" | "retry" | "restart") => {
+    if (auth.status !== "signed-in" || selection.kind !== "draft") return;
+
+    const retryingAttempt = mode === "retry" && selectedAttemptMatchesDraft?.error?.retryable
+      ? selectedAttemptMatchesDraft
+      : null;
+    const clientRequestId = retryingAttempt?.clientRequestId ?? generateRoomClientRequestId();
+    const coordinates = selection.coordinates;
+    const nextAttempt: RoomCreateAttempt = {
+      clientRequestId,
+      coordinates,
+      status: "pending"
+    };
+
+    queryClient.setQueryData(roomCreateAttemptsQueryKey, (existing: RoomCreateAttempt[] | undefined) => {
+      const attempts = existing ?? [];
+      return attempts.some((attempt) => attempt.clientRequestId === clientRequestId)
+        ? attempts.map((attempt) => attempt.clientRequestId === clientRequestId ? nextAttempt : attempt)
+        : [...attempts, nextAttempt];
+    });
+    setSelectedAttemptId(clientRequestId);
+    roomCreate.mutate({
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      clientRequestId
+    });
+  }, [auth.status, queryClient, roomCreate, selectedAttemptMatchesDraft, selection]);
 
   return <div className="map-workspace">
     <div className="map-frame" aria-busy={rooms.isPending}>
       <LeafletCanvas
         rooms={visibleRooms}
+        attempts={createAttempts.data}
         selection={selection}
+        selectedAttemptId={selectedAttemptId}
         onRoomSelect={selectRoom}
+        onAttemptSelect={selectAttempt}
         onDraftSelect={selectDraft}
       />
       <div className="map-state" role="group" aria-label="Room loading status">
@@ -334,7 +514,9 @@ export function RoomMap() {
       <section className="room-panel" aria-labelledby="room-panel-title">
         <p className="eyebrow">Map selection</p>
         <h2 id="room-panel-title" ref={panelHeadingRef} tabIndex={-1}>
-          {selectedRoom?.title ?? (selection.kind === "draft" ? "Unsaved room location" : "Choose a room")}
+          {selectedRoom?.title ?? (selectedAttemptMatchesDraft
+            ? (selectedAttemptMatchesDraft.status === "pending" ? "Saving room location" : "Room creation needs attention")
+            : (selection.kind === "draft" ? "Unsaved room location" : "Choose a room"))}
         </h2>
         {selectedRoom && <div className="room-panel__state">
           <p className="state-label state-label--selected"><span aria-hidden="true">✓</span> Selected persisted room</p>
@@ -342,16 +524,39 @@ export function RoomMap() {
           <p className="empty-state">No messages are available in this room shell yet.</p>
         </div>}
         {selection.kind === "draft" && <div className="room-panel__state">
-          <p className="state-label state-label--draft"><span aria-hidden="true">+</span> Local unsaved draft</p>
+          {selectedAttemptMatchesDraft?.status === "pending"
+            ? <p className="state-label state-label--saving"><span aria-hidden="true">…</span> Saving pending room</p>
+            : <p className="state-label state-label--draft"><span aria-hidden="true">+</span> Local unsaved draft</p>}
           <p className="coordinates">{selection.coordinates.latitude.toString()}, {selection.coordinates.longitude.toString()}</p>
-          {auth.status === "signed-out" && <p>Sign in with Google to keep this location and then choose whether to create the room.</p>}
+          {selectedAttemptMatchesDraft?.status === "pending" && <>
+            <p role="status">Creating this room now. Messages stay disabled until the server confirms it.</p>
+            <Button type="button" disabled>Creating room…</Button>
+          </>}
+          {selectedAttemptMatchesDraft?.status === "failed" && <>
+            <p className="create-error" role="alert">{selectedAttemptMatchesDraft.error?.message ?? "Room creation failed. Please try again later."}</p>
+            <p>This failed attempt kept its location and request ID for a targeted retry. No confirmed room was added.</p>
+            {auth.status !== "signed-in" && <p>Sign in with Google again to retry this saved attempt.</p>}
+            {auth.status === "signed-in" && selectedAttemptMatchesDraft.error?.retryable && <Button
+              type="button"
+              onClick={() => startCreateAttempt("retry")}
+            >
+              Retry creating room
+            </Button>}
+            {auth.status === "signed-in" && !selectedAttemptMatchesDraft.error?.retryable && <Button
+              type="button"
+              variant="secondary"
+              onClick={() => startCreateAttempt("restart")}
+            >
+              Start a new attempt here
+            </Button>}
+          </>}
+          {!selectedAttemptMatchesDraft && auth.status === "signed-out" && <p>Sign in with Google to keep this location and then choose whether to create the room.</p>}
           {auth.status === "loading" && <p role="status">Checking whether this draft can be resumed…</p>}
           {auth.status === "error" && <p>Your draft is safe in this URL while the session check is unavailable.</p>}
-          {auth.status === "signed-in" && <>
+          {!selectedAttemptMatchesDraft && auth.status === "signed-in" && <>
             <p>Your draft was restored. Creating the room still requires an explicit action.</p>
-            <Button type="button" onClick={() => setCreateIntent(true)}>Create room here</Button>
+            <Button type="button" onClick={() => startCreateAttempt("create")}>Create room here</Button>
           </>}
-          {createIntent && <p className="create-intent" role="status">Room creation is ready for the next step. Nothing has been submitted.</p>}
         </div>}
         {selection.kind === "none" && <div className="room-panel__state">
           <p>Select a persisted pin, or click empty map space to choose a new room location.</p>
