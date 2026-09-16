@@ -12,6 +12,16 @@ Execute only after the developer supplies this QA stage. Use the implementation 
 - Runtime/tool versions and isolated service identifiers: <values>
 - Scope: <what was and was not tested>; code fixes authorized: yes/no
 
+## Human-readable change audit
+
+List what the implementation actually changed before reporting test results. This section is written for the developer to review without reconstructing the diff.
+
+| Task / acceptance ID | What changed in plain language | Actual files / important lines | How QA inspected or exercised it | Status |
+| --- | --- | --- | --- | --- |
+| <ID> | <observable behavior or technical change> | <paths and relevant lines/symbols> | <inspection, command or scenario> | NOT_RUN |
+
+Cover every material task outcome and explicitly identify unexpected, missing, or out-of-scope changes. A file list alone is not a change explanation, and a PASS without inspecting the corresponding implementation is invalid.
+
 ## Gates
 
 Allowed statuses: `PASS`, `FAIL`, `BLOCKED`, `NOT_RUN`, `N/A` with reason. A listed command is not evidence of execution.
@@ -48,6 +58,7 @@ Include the task's negative cases and relevant concurrent/late-event cases. Dist
 - [ ] No skipped/empty suites or stale pre-change results presented as passes.
 - [ ] Reports and retained traces contain no credentials, tokens or session data.
 - [ ] Actual changed files checked against task scope, including untracked files.
+- [ ] Every material modification is represented in the human-readable change audit and can be understood by the developer.
 - [ ] QA outcome stated: verified / changes required / blocked / partial.
 
 <State remaining risk, what must be rerun after changes/integration, and whether a separate reviewer has actually checked this snapshot.>

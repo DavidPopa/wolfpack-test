@@ -39,7 +39,7 @@ Skills do not grant broader authority. Diagnosis, QA and review-only requests do
 5. Once those stages are complete, the orchestrator checks the task, QA, review and actual diff/source, including untracked files, and reports corrections or readiness.
 6. The developer commits, pushes and publishes the scoped PR; CI and PR review precede developer merge. A local pass is not a CI pass or merge approval.
 
-Every handoff records base/HEAD, task-owned committed/staged/unstaged/untracked changes, exact verification results and known limitations. Use `PASS`, `FAIL`, `BLOCKED`, `NOT_RUN` and justified `N/A`. Stop after one task with changes uncommitted; do not automatically begin the next task.
+Every handoff records base/HEAD, task-owned committed/staged/unstaged/untracked changes, exact verification results and known limitations. QA and review reports also include a plain-language audit of what actually changed, mapped to files and evidence, so the developer can inspect the intended PR without reconstructing it from Git status. Use `PASS`, `FAIL`, `BLOCKED`, `NOT_RUN` and justified `N/A`. Stop after one task with changes uncommitted; do not automatically begin the next task.
 
 ## PRs, worktrees and parallelism
 
