@@ -59,7 +59,7 @@ Open `http://127.0.0.1:3000`. In development only, Next rewrites same-origin `/a
 
 If either application port is already owned, choose isolated alternatives without stopping that process, for example `PORT=4100 WEB_PORT=3100 pnpm dev`, then open the selected web port. The development rewrite follows the selected API `PORT`.
 
-The production stack is isolated as Compose project `mapchat-foundation-001` and publishes only nginx at `127.0.0.1:8081`:
+The production stack is isolated as Compose project `wolfpack` and publishes only nginx at `127.0.0.1:8081`:
 
 ```sh
 pnpm stack:up
@@ -94,7 +94,7 @@ pnpm services:test:stop
 
 Prisma validation intentionally has no generator, models, migrations, or ORM CRUD claim; those await the approved domain schema. E2E injects the real Socket.IO client into Chromium as a test-only harness and proves polling plus forced WebSocket through nginx.
 
-For the production-volume check, use a unique `foundation_task001_*` temporary table directly through `docker compose -p mapchat-foundation-001 exec -T postgres psql`, insert one dummy row, stop/start with the scripts above, verify the row, then drop only that fixture table. Never remove the volume.
+For the production-volume check, use a unique `foundation_task001_*` temporary table directly through `docker compose exec -T postgres psql`, insert one dummy row, stop/start with the scripts above, verify the row, then drop only that fixture table. Never remove the volume.
 
 ## Hooks
 

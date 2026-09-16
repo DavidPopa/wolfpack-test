@@ -1,3 +1,5 @@
+name: wolfpack-test
+
 services:
   postgres-test:
     image: postgres:17.8-bookworm@sha256:45e40832755b7133da62e701ee496d65afc5e4527c8ff5446c2f3bdd11bc58e3
