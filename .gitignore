@@ -1,6 +1,7 @@
 .runtime/
 .worktree/
 node_modules/
+/.pnpm-store/
 .next/
 dist/
 *.tsbuildinfo
