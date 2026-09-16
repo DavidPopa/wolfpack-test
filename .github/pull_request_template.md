@@ -24,4 +24,4 @@ Dependencies / base: <values>
 
 <!-- Environment/migration requirements without secrets, known limitations, deferred findings with reasons, and integration checks still required. -->
 
-Only the developer commits, publishes and merges unless publication is separately authorized. Local success does not establish PR CI success.
+The developer commits and pushes, or explicitly authorizes the orchestrator to perform a specific reviewed commit/push. Execution agents never do so. PR publication and merge remain developer-owned unless separately authorized. Local success does not establish PR CI success.

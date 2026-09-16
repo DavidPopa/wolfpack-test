@@ -3,7 +3,7 @@
 ## Authority and roles
 
 - Follow the developer's current instructions. The [PRD](docs/PRD.md) defines product intent; actual code, tests and command output establish what works. Report disagreements instead of changing scope.
-- Only the human developer commits, including temporary commits and amend. Do not stage, push, merge, rebase, cherry-pick, publish a PR or change Git configuration without explicit assignment; committing remains human-only.
+- The human developer may stage, commit and push. The orchestrator may stage, commit and push only when the developer explicitly requests that exact action for a clear scope; task approval, implementation approval or a general instruction to continue is not Git authorization. Execution/QA/review agents never stage, commit or push. Merge, rebase, cherry-pick, PR publication and Git-configuration changes remain developer-owned unless separately and explicitly assigned.
 - The orchestrator plans, writes task/configuration documentation and reviews evidence and actual changes. It does not implement application/tooling code or start agents.
 - The developer starts fresh GPT-5.6 Sol/medium terminal agents. No subagents, background agent sessions or automatic model changes. The orchestrator currently uses GPT-5.6 Sol/high; the developer may switch it to Astra/high for unusually difficult review or reasoning work.
 - Preserve pre-existing changes. Do not reset/stash user work, reset databases, remove volumes, bypass hooks or weaken checks. Report missing authority, dependencies or credentials precisely.
@@ -37,7 +37,7 @@ Skills do not grant broader authority. Diagnosis, QA and review-only requests do
 3. The agent implements only that task, runs its required implementation checks in the documented order, updates the task with results and limitations, and stops uncommitted. It does not automatically begin the separate QA or review stages.
 4. The developer later supplies the QA document, then any review/fix instructions, when each stage should run. The same agent may continue; a fresh session is optional, not required. QA must inspect the actual implementation worktree, including uncommitted changes. Self-review is not independent review.
 5. Once those stages are complete, the orchestrator checks the task, QA, review and actual diff/source, including untracked files, and reports corrections or readiness.
-6. The developer commits, pushes and publishes the scoped PR; CI and PR review precede developer merge. A local pass is not a CI pass or merge approval.
+6. The developer commits and pushes the scoped PR, or explicitly instructs the orchestrator to perform the named commit/push for the reviewed scope. The developer publishes and merges the PR; CI and PR review precede merge. A local pass is not a CI pass or merge approval.
 
 Every handoff records base/HEAD, task-owned committed/staged/unstaged/untracked changes, exact verification results and known limitations. QA and review reports also include a plain-language audit of what actually changed, mapped to files and evidence, so the developer can inspect the intended PR without reconstructing it from Git status. Use `PASS`, `FAIL`, `BLOCKED`, `NOT_RUN` and justified `N/A`. Stop after one task with changes uncommitted; do not automatically begin the next task.
 
