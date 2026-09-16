@@ -82,6 +82,10 @@ Better Auth is exposed through the same origin as the web application. Register 
 
 Google personal and Workspace accounts are accepted; no hosted-domain restriction is configured. Email/password sign-up and sign-in are disabled. Replace the dummy Google values and auth secret through local, uncommitted environment configuration before a real-provider smoke. Real Google OAuth status for task-002A: **NOT_RUN** because no developer-supplied credentials were used; automated handler tests do not prove Google or database-session behavior.
 
+The Next.js app has one Better Auth React client in `apps/web/lib/auth-client.ts`. It deliberately omits an absolute `baseURL` and uses `/api/auth`, so browser session and future sign-in/sign-out calls stay on the application origin through the existing development rewrite or production nginx proxy. `useAuthSession` is a thin projection of Better Auth's reactive session hook into explicit loading, signed-out, signed-in and retryable error states; it does not copy auth state into TanStack Query. Future auth UI must pass callback/return locations through `getSafeReturnTarget` before using them, which preserves only targets on the browser-facing application origin and leaves room for later draft-location restoration.
+
+The focused web tests mock the Better Auth client boundary. They prove client configuration, state projection/retry behavior and return-target validation only; they do not prove the proxy, PostgreSQL sessions or real Google OAuth.
+
 ## Server-side session boundary and auth tests
 
 Protected API work must use the typed server-side resolver in `apps/api/src/auth.ts`. It passes only the incoming request headers to Better Auth, forces an authoritative database lookup instead of trusting cookie cache, avoids a hidden session refresh whose cookie could not be forwarded from a protected endpoint, and returns only the verified user ID. Request bodies, identity-like headers, bearer values and environment variables cannot activate a fixture identity. The production runtime always constructs this resolver and the Express handler from the same real Better Auth instance.
