@@ -2,7 +2,7 @@
 
 Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. Visitors will explore public chat rooms placed on a map and read their conversations; authenticated users will create rooms and send messages in real time.
 
-The repository currently contains the runnable foundation: a Next.js 16 health page, an Express 5 infrastructure API, a browser-safe shared contract, an empty Socket.IO 4 transport, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication, rooms, messages, maps, rate limits, and product realtime events are intentionally not implemented yet.
+The repository contains the runnable foundation plus the initial Prisma data layer: Better Auth's core tables, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication HTTP behavior, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
 
 ## Planned features
 
@@ -44,7 +44,7 @@ pnpm --version
 pnpm install --frozen-lockfile
 ```
 
-External direct dependencies are exact pins—no caret, tilde, or floating `latest` specifiers. Prisma CLI, client, and PostgreSQL adapter are aligned at `7.10.0`; generation remains deferred because there are no approved domain models. pnpm permits lifecycle builds only for reviewed pinned tooling that needs setup or native binaries: Prisma client/engines/CLI, SWC, esbuild/tsx, Tailwind's Parcel watcher, and the ESLint resolver. Installation has no `prepare` script and does not change Git configuration.
+External direct dependencies are exact pins—no caret, tilde, or floating `latest` specifiers. Prisma CLI, client, and PostgreSQL adapter are aligned at `7.10.0`; Better Auth and its Prisma adapter are aligned at `1.7.5`. pnpm permits lifecycle builds only for reviewed pinned tooling that needs setup or native binaries: Prisma client/engines/CLI, SWC, esbuild/tsx, Tailwind's Parcel watcher, and the ESLint resolver. Installation has no `prepare` script and does not change Git configuration.
 
 ## Local development and production stack
 
@@ -55,7 +55,7 @@ pnpm services:test:up
 pnpm dev
 ```
 
-Open `http://127.0.0.1:3000`. In development only, Next rewrites same-origin `/api/*` requests to Express on `127.0.0.1:4000`; production continues to use nginx. `pnpm dev` supplies the dummy connection values recorded in `.env.example` and fails clearly when the isolated services are unavailable. Development mode is not production E2E proof. Stop its dependencies with `pnpm services:test:stop` after stopping the dev process.
+Open `http://127.0.0.1:3000`. `pnpm dev` regenerates the ignored Prisma client before compiling or starting either application, supplies the dummy connection values recorded in `.env.example`, and fails clearly when the isolated services are unavailable. In development only, Next rewrites same-origin `/api/*` requests to Express on `127.0.0.1:4000`; production continues to use nginx. Development mode is not production E2E proof. Stop its dependencies with `pnpm services:test:stop` after stopping the dev process.
 
 If either application port is already owned, choose isolated alternatives without stopping that process, for example `PORT=4100 WEB_PORT=3100 pnpm dev`, then open the selected web port. The development rewrite follows the selected API `PORT`.
 
@@ -77,6 +77,7 @@ Start the isolated test PostgreSQL/Redis pair first. It uses `127.0.0.1:55431`, 
 ```sh
 pnpm services:test:up
 pnpm db:validate
+pnpm db:generate
 pnpm exec playwright install chromium
 pnpm lint
 pnpm typecheck
@@ -92,13 +93,15 @@ pnpm stack:stop
 pnpm services:test:stop
 ```
 
-Prisma validation intentionally has no generator, models, migrations, or ORM CRUD claim; those await the approved domain schema. E2E injects the real Socket.IO client into Chromium as a test-only harness and proves polling plus forced WebSocket through nginx.
+`services:test:up` deploys the committed migration to the isolated test database. Use `pnpm db:migrate:test:status` to inspect it. Creating a new migration is an explicit developer action with `pnpm db:migrate:test:create --name <name>`; production commands require an explicitly supplied `DATABASE_URL`, for example `DATABASE_URL=postgresql://... pnpm db:migrate:deploy` or `DATABASE_URL=postgresql://... pnpm db:migrate:status`. Never run a reset against a persistent database. E2E injects the real Socket.IO client into Chromium as a test-only harness and proves polling plus forced WebSocket through nginx.
+
+The generated Prisma client is intentionally not committed. Root `dev`, `typecheck`, API unit/integration test, and `build` commands each regenerate it before consuming API runtime code, so they remain reproducible after a clean install. The explicit `pnpm db:generate` step above keeps generation visible as setup evidence; CI and Docker also retain their own generation steps.
 
 For the production-volume check, use a unique `foundation_task001_*` temporary table directly through `docker compose exec -T postgres psql`, insert one dummy row, stop/start with the scripts above, verify the row, then drop only that fixture table. Never remove the volume.
 
 ## Hooks
 
-`.husky/pre-commit` invokes `pnpm hooks:check`, which stops on the first failure in this order: lint, types, API unit, API integration, web Jest. The integration gate fails clearly when the isolated services are unavailable. These working-tree checks do not prove a different partially staged snapshot.
+`.husky/pre-commit` invokes `pnpm hooks:check`, which stops on the first failure in this order: lint, types, API unit, API integration, web Jest. The root typecheck and API test commands regenerate the Prisma client, so the hook does not depend on ignored output from an earlier command. The integration gate fails clearly when the isolated services are unavailable. These working-tree checks do not prove a different partially staged snapshot.
 
 Husky is configured but deliberately not activated by installation. Only the developer should run:
 
@@ -117,4 +120,4 @@ The project-local Codex `PreToolUse` guard and harmless fixtures live under `.co
 
 ## CI and current limits
 
-PR CI uses a frozen install, isolated services, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Google OAuth/provider verification, auth fixtures, maps, chat behavior, domain persistence, rate limits, deployment, and cost research are outside this foundation task.
+PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Google OAuth/provider verification, auth fixtures, maps, room/message HTTP behavior, rate limits, deployment, and cost research are outside this data task.

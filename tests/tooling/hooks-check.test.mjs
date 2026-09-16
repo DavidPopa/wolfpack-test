@@ -5,6 +5,16 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
+test("root Prisma-consuming workflows generate the ignored client", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  for (const command of ["dev", "typecheck", "test:api:unit", "test:api:integration", "build"]) {
+    assert.match(packageJson.scripts[command], /(?:^|&& )pnpm db:generate(?: &&|$)/, `${command} must generate Prisma Client`);
+  }
+
+  const hook = await readFile("scripts/hooks-check.sh", "utf8");
+  assert.match(hook, /pnpm typecheck/);
+});
+
 async function fakePnpm() {
   const directory = await mkdtemp(join(tmpdir(), "mapchat-hooks-"));
   const executable = join(directory, "pnpm");
