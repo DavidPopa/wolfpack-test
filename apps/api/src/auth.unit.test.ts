@@ -1,4 +1,4 @@
-import { buildAuthOptions } from "./auth.js";
+import { buildAuthOptions, createSessionResolver } from "./auth.js";
 import type { AuthConfig } from "./config.js";
 import type { RuntimePrismaClient } from "./prisma.js";
 
@@ -42,5 +42,25 @@ describe("Google-only Better Auth configuration", () => {
       createDatabase as never
     );
     expect(secureOptions.advanced?.useSecureCookies).toBe(true);
+  });
+});
+
+describe("authenticated identity resolver", () => {
+  it("derives identity only from a verified header session", async () => {
+    const verifySession = jest.fn(async () => ({ user: { id: "verified-user-id" } }));
+    const resolveIdentity = createSessionResolver(verifySession);
+    const request = {
+      headers: { cookie: "opaque-session-cookie", "x-user-id": "spoofed-header-id" },
+      body: { userId: "spoofed-payload-id" }
+    };
+
+    await expect(resolveIdentity(request)).resolves.toEqual({ userId: "verified-user-id" });
+    expect(verifySession).toHaveBeenCalledWith(request.headers);
+    expect(verifySession).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns no identity when Better Auth verifies no session", async () => {
+    const resolveIdentity = createSessionResolver(async () => null);
+    await expect(resolveIdentity({ headers: {} })).resolves.toBeNull();
   });
 });

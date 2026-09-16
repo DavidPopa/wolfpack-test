@@ -1,9 +1,8 @@
 import type { Express } from "express";
-import type { RequestHandler } from "express";
 import { Pool } from "pg";
 import { createClient } from "redis";
 import { createApp } from "./app.js";
-import { createAuthHandler } from "./auth.js";
+import { createAuthBoundary, type AuthBoundary } from "./auth.js";
 import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
@@ -25,7 +24,7 @@ export interface RuntimeRedis {
 export interface RuntimeDependencies {
   createPool: (databaseUrl: string, timeoutMs: number) => RuntimePool;
   createPrisma: (databaseUrl: string) => RuntimePrismaClient;
-  createAuthHandler: (prisma: RuntimePrismaClient, config: AuthConfig) => RequestHandler | Promise<RequestHandler>;
+  createAuthBoundary: (prisma: RuntimePrismaClient, config: AuthConfig) => AuthBoundary | Promise<AuthBoundary>;
   createRedis: (redisUrl: string, timeoutMs: number) => RuntimeRedis;
   createServer: (app: Express) => RunningServer;
 }
@@ -38,7 +37,7 @@ export interface RunningApi {
 const defaultDependencies: RuntimeDependencies = {
   createPool: (databaseUrl, timeoutMs) => new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: timeoutMs }),
   createPrisma: createPrismaClient,
-  createAuthHandler,
+  createAuthBoundary,
   createRedis: (redisUrl, timeoutMs) => createClient({ url: redisUrl, socket: { connectTimeout: timeoutMs } }),
   createServer: createAppServer
 };
@@ -75,9 +74,9 @@ export async function startApi(
     redis = dependencies.createRedis(config.redisUrl, config.readinessTimeoutMs);
     redis.on("error", () => undefined);
     await redis.connect();
-    const authHandler = await dependencies.createAuthHandler(prisma, config.auth);
+    const auth = await dependencies.createAuthBoundary(prisma, config.auth);
     const app = createApp({
-      authHandler,
+      auth,
       probes: createProbeDependencies(pool, redis),
       readinessTimeoutMs: config.readinessTimeoutMs
     });

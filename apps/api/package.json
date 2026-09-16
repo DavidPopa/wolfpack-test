@@ -4,7 +4,7 @@
     "dev": "tsx watch src/main.ts", "build": "tsc -p tsconfig.json", "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:unit": "jest --config ../../jest.config.api.unit.mjs --runInBand",
-    "test:integration": "jest --config ../../jest.config.api.integration.mjs --runInBand"
+    "test:integration": "NODE_ENV=production NODE_OPTIONS=--experimental-vm-modules jest --config ../../jest.config.api.integration.mjs --runInBand"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "1.7.5", "@map-chat/contracts": "workspace:*", "@prisma/adapter-pg": "7.10.0", "@prisma/client": "7.10.0",

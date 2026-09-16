@@ -2,7 +2,7 @@
 
 Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. Visitors will explore public chat rooms placed on a map and read their conversations; authenticated users will create rooms and send messages in real time.
 
-The repository contains the runnable foundation plus the initial Prisma data layer and Google-only Better Auth API configuration: Better Auth's core tables and Express handler, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Persistent session integration, authentication UI, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
+The repository contains the runnable foundation plus the initial Prisma data layer and Google-only Better Auth API lifecycle: Better Auth's core tables and Express handler, authoritative server-side session resolution, persistent session/logout coverage, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication UI, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
 
 ## Planned features
 
@@ -82,9 +82,15 @@ Better Auth is exposed through the same origin as the web application. Register 
 
 Google personal and Workspace accounts are accepted; no hosted-domain restriction is configured. Email/password sign-up and sign-in are disabled. Replace the dummy Google values and auth secret through local, uncommitted environment configuration before a real-provider smoke. Real Google OAuth status for task-002A: **NOT_RUN** because no developer-supplied credentials were used; automated handler tests do not prove Google or database-session behavior.
 
+## Server-side session boundary and auth tests
+
+Protected API work must use the typed server-side resolver in `apps/api/src/auth.ts`. It passes only the incoming request headers to Better Auth, forces an authoritative database lookup instead of trusting cookie cache, avoids a hidden session refresh whose cookie could not be forwarded from a protected endpoint, and returns only the verified user ID. Request bodies, identity-like headers, bearer values and environment variables cannot activate a fixture identity. The production runtime always constructs this resolver and the Express handler from the same real Better Auth instance.
+
+Unit tests can replace the auth boundary only when calling the application factory directly. The real PostgreSQL integration creates a uniquely prefixed user and session with Better Auth's test-only construction plugin, which registers no HTTP endpoints, and then verifies that the normal production boundary resolves the cookie. It also proves that an untrusted origin cannot log out the session, a configured same-origin request deletes the persisted session and clears the cookie, and cleanup removes only the generated user/account/session rows. These seeded fixtures prove the database/session lifecycle only; they do not contact Google or prove real Google OAuth. Real Google OAuth status for task-002B remains **NOT_RUN** without developer-supplied credentials.
+
 ## Ordered verification
 
-Start the isolated test PostgreSQL/Redis pair first. It uses `127.0.0.1:55431`, database `mapchat_foundation_test`, `127.0.0.1:56381`, and keys under `foundation:task001:`. Integration cleanup deletes only the exact generated Redis key and rolls back its SQL fixture.
+Start the isolated test PostgreSQL/Redis pair first. It uses `127.0.0.1:55431`, database `mapchat_foundation_test`, `127.0.0.1:56381`, and keys under `foundation:task001:`. Integration cleanup deletes only the exact generated Redis key, rolls back the foundation SQL fixture, and deletes uniquely prefixed auth rows through their generated user IDs without resetting the database.
 
 ```sh
 pnpm services:test:up
@@ -132,4 +138,4 @@ The project-local Codex `PreToolUse` guard and harmless fixtures live under `.co
 
 ## CI and current limits
 
-PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Automated checks cover the auth configuration and unauthenticated handler boundary only; real Google OAuth, authenticated persistence/logout, auth fixtures, maps, room/message HTTP behavior, rate limits, deployment, and cost research remain outside this task.
+PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Automated checks cover auth configuration plus seeded PostgreSQL session resolution/logout; they do not prove real Google OAuth. Authentication UI, maps, room/message HTTP behavior, rate limits, deployment, and cost research remain outside this task.

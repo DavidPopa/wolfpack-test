@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { RequestHandler } from "express";
 import { startApi, type RuntimePool, type RuntimeRedis } from "./runtime.js";
+import type { AuthBoundary } from "./auth.js";
 import type { RuntimePrismaClient } from "./prisma.js";
 import { createAppServer, type RunningServer } from "./server.js";
 
@@ -18,6 +19,7 @@ const validEnvironment = {
 };
 
 const authHandler: RequestHandler = (_request, response) => response.status(404).end();
+const auth: AuthBoundary = { handler: authHandler, resolveIdentity: async () => null };
 
 it("creates one Prisma client from the validated URL and disconnects it on shutdown", async () => {
   const pool: RuntimePool = { query: jest.fn(async () => undefined), end: jest.fn(async () => undefined) };
@@ -40,12 +42,12 @@ it("creates one Prisma client from the validated URL and disconnects it on shutd
     close: jest.fn(async () => undefined)
   };
   const createPrisma = jest.fn(() => prisma);
-  const createAuthHandler = jest.fn(() => authHandler);
+  const createAuthBoundary = jest.fn(() => auth);
 
   const running = await startApi(validEnvironment, {
     createPool: () => pool,
     createPrisma,
-    createAuthHandler,
+    createAuthBoundary,
     createRedis: () => redis,
     createServer: () => runningServer
   });
@@ -54,8 +56,8 @@ it("creates one Prisma client from the validated URL and disconnects it on shutd
 
   expect(createPrisma).toHaveBeenCalledTimes(1);
   expect(createPrisma).toHaveBeenCalledWith(validEnvironment.DATABASE_URL);
-  expect(createAuthHandler).toHaveBeenCalledTimes(1);
-  expect(createAuthHandler).toHaveBeenCalledWith(prisma, {
+  expect(createAuthBoundary).toHaveBeenCalledTimes(1);
+  expect(createAuthBoundary).toHaveBeenCalledWith(prisma, {
     secret: validEnvironment.BETTER_AUTH_SECRET,
     baseUrl: validEnvironment.BETTER_AUTH_URL,
     trustedOrigins: [validEnvironment.BETTER_AUTH_URL],
@@ -100,7 +102,7 @@ it("closes every acquired resource when the configured port is occupied", async 
       {
         createPool: () => pool,
         createPrisma: () => prisma,
-        createAuthHandler: () => authHandler,
+        createAuthBoundary: () => auth,
         createRedis: () => redis,
         createServer: createAppServer
       }
