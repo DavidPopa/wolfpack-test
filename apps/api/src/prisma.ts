@@ -1,7 +1,8 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client.js";
+import type { RoomReadPrismaClient } from "./rooms/repository.js";
 
-export interface RuntimePrismaClient {
+export interface RuntimePrismaClient extends RoomReadPrismaClient {
   $connect: () => Promise<void>;
   $disconnect: () => Promise<void>;
 }

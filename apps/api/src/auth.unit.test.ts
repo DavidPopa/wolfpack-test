@@ -12,7 +12,8 @@ const authConfig: AuthConfig = {
 
 const prisma: RuntimePrismaClient = {
   $connect: async () => undefined,
-  $disconnect: async () => undefined
+  $disconnect: async () => undefined,
+  room: { findMany: async () => [] }
 };
 
 describe("Google-only Better Auth configuration", () => {

@@ -25,7 +25,8 @@ it("creates one Prisma client from the validated URL and disconnects it on shutd
   const pool: RuntimePool = { query: jest.fn(async () => undefined), end: jest.fn(async () => undefined) };
   const prisma: RuntimePrismaClient = {
     $connect: jest.fn(async () => undefined),
-    $disconnect: jest.fn(async () => undefined)
+    $disconnect: jest.fn(async () => undefined),
+    room: { findMany: jest.fn(async () => []) }
   };
   let redisOpen = false;
   const redis: RuntimeRedis = {
@@ -84,7 +85,8 @@ it("closes every acquired resource when the configured port is occupied", async 
   };
   const prisma: RuntimePrismaClient = {
     $connect: jest.fn(async () => undefined),
-    $disconnect: jest.fn(async () => undefined)
+    $disconnect: jest.fn(async () => undefined),
+    room: { findMany: jest.fn(async () => []) }
   };
   let redisOpen = false;
   const redis: RuntimeRedis = {

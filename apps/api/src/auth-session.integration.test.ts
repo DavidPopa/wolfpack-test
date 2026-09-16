@@ -6,6 +6,8 @@ import { createApp } from "./app.js";
 import { buildAuthOptions, createAuthBoundary } from "./auth.js";
 import type { AuthConfig } from "./config.js";
 import { createPrismaClient } from "./prisma.js";
+import { createPrismaRoomReadRepository } from "./rooms/repository.js";
+import { createRoomListService } from "./rooms/service.js";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl) throw new Error("TEST_DATABASE_URL is required for persistent auth session integration tests");
@@ -68,7 +70,8 @@ describe("persistent Better Auth sessions", () => {
     const app = createApp({
       auth,
       probes: { postgres: async () => true, redis: async () => true },
-      readinessTimeoutMs: 100
+      readinessTimeoutMs: 100,
+      rooms: createRoomListService(createPrismaRoomReadRepository(prisma))
     });
 
     await expect(app.resolveIdentity({ headers: { cookie } })).resolves.toEqual({ userId });

@@ -6,6 +6,8 @@ import { createAuthBoundary, type AuthBoundary } from "./auth.js";
 import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
+import { createPrismaRoomReadRepository } from "./rooms/repository.js";
+import { createRoomListService } from "./rooms/service.js";
 import { createAppServer, type RunningServer } from "./server.js";
 
 export interface RuntimePool {
@@ -78,7 +80,8 @@ export async function startApi(
     const app = createApp({
       auth,
       probes: createProbeDependencies(pool, redis),
-      readinessTimeoutMs: config.readinessTimeoutMs
+      readinessTimeoutMs: config.readinessTimeoutMs,
+      rooms: createRoomListService(createPrismaRoomReadRepository(prisma))
     });
     server = dependencies.createServer(app);
     const port = await server.listen(config.port);
