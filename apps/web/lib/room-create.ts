@@ -146,7 +146,13 @@ export async function createRoom(request: RoomCreateRequest): Promise<RoomCreate
     }
     return {
       clientRequestId: created.clientRequestId,
-      room: publicRoomSchema.parse(created)
+      room: publicRoomSchema.parse({
+        id: created.id,
+        title: created.title,
+        latitude: created.latitude,
+        longitude: created.longitude,
+        createdAt: created.createdAt
+      })
     };
   }
 

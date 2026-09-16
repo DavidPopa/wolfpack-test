@@ -7,6 +7,8 @@ import type { AuthSession } from "@/lib/auth-client";
 import type { AuthSessionState } from "@/lib/auth-session";
 import { useAuthSession } from "@/lib/auth-session";
 import { fetchPublicRooms } from "@/lib/rooms";
+import { roomCreateAttemptsQueryKey, type RoomCreateAttempt } from "@/lib/room-create";
+import { roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
 import { RoomMap } from "./room-map";
 
 type MockMapEvent = {
@@ -25,6 +27,7 @@ type MockMarker = {
   on: (eventName: string, handler: (event: MockMarkerEvent) => void) => MockMarker;
   removeFrom: jest.Mock<void, [unknown]>;
   setIcon: jest.Mock<void, [unknown]>;
+  setLatLng: jest.Mock<void, [[number, number]]>;
   options: Record<string, unknown>;
 };
 
@@ -89,6 +92,7 @@ jest.mock("leaflet", () => ({
       },
       removeFrom: jest.fn(),
       setIcon: jest.fn(),
+      setLatLng: jest.fn(),
       options: { ...options, coordinates }
     };
     mockMarkerInstances.push(marker);
@@ -98,7 +102,10 @@ jest.mock("leaflet", () => ({
 }));
 
 jest.mock("@/lib/auth-session", () => ({ useAuthSession: jest.fn() }));
-jest.mock("@/lib/rooms", () => ({ fetchPublicRooms: jest.fn() }));
+jest.mock("@/lib/rooms", () => ({
+  ...jest.requireActual("@/lib/rooms"),
+  fetchPublicRooms: jest.fn()
+}));
 jest.mock("./auth-panel", () => ({ AuthPanel: () => <section aria-label="Account controls">Mock account controls</section> }));
 
 const rooms = [
@@ -141,7 +148,29 @@ function renderRoomMap() {
     }
   });
   const Wrapper = ({ children }: PropsWithChildren) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-  return render(<RoomMap />, { wrapper: Wrapper });
+  return { ...render(<RoomMap />, { wrapper: Wrapper }), client };
+}
+
+function createResponse(status: number, body: unknown): Response {
+  return { status, json: async () => body } as Response;
+}
+
+function successfulRoomResponse(status: 200 | 201, id: string, title: string) {
+  return async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const request = JSON.parse(String(init?.body)) as {
+      latitude: number;
+      longitude: number;
+      clientRequestId: string;
+    };
+    return createResponse(status, {
+      id,
+      title,
+      latitude: request.latitude,
+      longitude: request.longitude,
+      createdAt: "2026-09-17T10:05:00.000Z",
+      clientRequestId: request.clientRequestId
+    });
+  };
 }
 
 function mapClick(latitude: number, longitude: number, target?: Element) {
@@ -177,6 +206,11 @@ beforeEach(() => {
   mockMapInstance.getZoom.mockReturnValue(13);
   mockUseAuthSession.mockReturnValue(signedOutState);
   mockFetchPublicRooms.mockResolvedValue(rooms);
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    writable: true,
+    value: jest.fn()
+  });
   window.history.replaceState({}, "", "/");
   jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
     callback(0);
@@ -278,22 +312,158 @@ describe("room map selection and draft state", () => {
     view.unmount();
   });
 
-  it("shows guest and signed-in draft recovery states while create only records local intent", async () => {
+  it("keeps guest restoration write-free and requires explicit signed-in creation", async () => {
     window.history.replaceState({}, "", "/?draft=12.5,23.75");
-    renderRoomMap();
+    const guestView = renderRoomMap();
     await waitForRooms();
 
     expect(screen.getByText("Sign in with Google to keep this location and then choose whether to create the room.")).toBeVisible();
+    expect(fetch).not.toHaveBeenCalled();
+    guestView.unmount();
+
     mockUseAuthSession.mockReturnValue(signedInState);
-    mockFetchPublicRooms.mockResolvedValue(rooms);
+    jest.mocked(fetch).mockImplementationOnce(async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as { clientRequestId: string };
+      return {
+        status: 201,
+        json: async () => ({
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Room at 12.5000, 23.7500",
+          latitude: 12.5,
+          longitude: 23.75,
+          createdAt: "2026-09-17T10:00:00.000Z",
+          clientRequestId: request.clientRequestId
+        })
+      } as Response;
+    });
     renderRoomMap();
     await screen.findByText("Your draft was restored. Creating the room still requires an explicit action.");
 
     const user = userEvent.setup();
-    const roomFetchesBeforeCreate = mockFetchPublicRooms.mock.calls.length;
     await user.click(screen.getByRole("button", { name: "Create room here" }));
-    expect(screen.getByText("Room creation is ready for the next step. Nothing has been submitted.")).toBeVisible();
-    expect(mockFetchPublicRooms).toHaveBeenCalledTimes(roomFetchesBeforeCreate);
+    expect(await screen.findByRole("heading", { name: "Room at 12.5000, 23.7500" })).toBeVisible();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([200, 201] as const)("reconciles an explicit signed-in %i response to one canonical room", async (status) => {
+    mockUseAuthSession.mockReturnValue(signedInState);
+    window.history.replaceState({}, "", "/?draft=10,20");
+    jest.mocked(fetch).mockImplementationOnce(successfulRoomResponse(
+      status,
+      "55555555-5555-4555-8555-555555555555",
+      `Canonical ${status}`
+    ));
+    const { client } = renderRoomMap();
+    await waitForRooms();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Create room here" }));
+    expect(await screen.findByRole("heading", { name: `Canonical ${status}` })).toBeVisible();
+    expect(client.getQueryData<PublicRoom[]>(roomsQueryKey)?.filter(
+      (room) => room.id === "55555555-5555-4555-8555-555555555555"
+    )).toHaveLength(1);
+    expect(client.getQueryData<RoomCreateAttempt[]>(roomCreateAttemptsQueryKey)).toEqual([]);
+  });
+
+  it.each([
+    [400, { error: { code: "INVALID_ROOM_REQUEST", message: "Invalid room request" } }, "This location could not be submitted", "Start a new attempt here"],
+    [401, { error: { code: "UNAUTHORIZED", message: "Authentication required" } }, "Please sign in again", "Retry creating room"],
+    [409, { error: { code: "ROOM_REQUEST_CONFLICT", message: "Request ID already used with different coordinates" } }, "retry token was already used", "Start a new attempt here"],
+    [429, { error: { code: "ROOM_RATE_LIMITED", message: "Room creation rate limit exceeded", retryAfterSeconds: 11 } }, "Try again in 11 seconds", "Retry creating room"],
+    [503, { error: { code: "ROOM_RATE_LIMIT_UNAVAILABLE", message: "Room creation is temporarily unavailable", retryable: true } }, "temporarily unavailable", "Retry creating room"]
+  ])("retains targeted attempt UI for HTTP %i", async (status, body, message, action) => {
+    mockUseAuthSession.mockReturnValue(signedInState);
+    window.history.replaceState({}, "", "/?draft=10,20");
+    jest.mocked(fetch).mockResolvedValueOnce(createResponse(status as number, body));
+    const { client } = renderRoomMap();
+    await waitForRooms();
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Create room here" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(String(message));
+    expect(screen.getByRole("button", { name: String(action) })).toBeVisible();
+    expect(client.getQueryData<RoomCreateAttempt[]>(roomCreateAttemptsQueryKey)).toEqual([
+      expect.objectContaining({ status: "failed", coordinates: { latitude: 10, longitude: 20 } })
+    ]);
+  });
+
+  it("reuses one request ID for a retryable network failure", async () => {
+    mockUseAuthSession.mockReturnValue(signedInState);
+    window.history.replaceState({}, "", "/?draft=10,20");
+    jest.mocked(fetch)
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockImplementationOnce(successfulRoomResponse(
+        200,
+        "66666666-6666-4666-8666-666666666666",
+        "Recovered room"
+      ));
+    renderRoomMap();
+    await waitForRooms();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Create room here" }));
+    await user.click(await screen.findByRole("button", { name: "Retry creating room" }));
+    expect(await screen.findByRole("heading", { name: "Recovered room" })).toBeVisible();
+    const requestIds = jest.mocked(fetch).mock.calls.map(([, init]) =>
+      (JSON.parse(String(init?.body)) as { clientRequestId: string }).clientRequestId
+    );
+    expect(requestIds).toHaveLength(2);
+    expect(requestIds[1]).toBe(requestIds[0]);
+  });
+
+  it("targets rollback and late success without dropping a second attempt, concurrent room, or newer selection", async () => {
+    mockUseAuthSession.mockReturnValue(signedInState);
+    window.history.replaceState({}, "", "/?draft=10,20");
+    let rejectFirst!: (reason: unknown) => void;
+    let resolveSecond!: (response: Response) => void;
+    jest.mocked(fetch)
+      .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectFirst = reject; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+    const { client } = renderRoomMap();
+    await waitForRooms();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Create room here" }));
+    act(() => mapClick(30, 40));
+    await user.click(screen.getByRole("button", { name: "Create room here" }));
+    await act(async () => rejectFirst(new TypeError("first offline")));
+    await waitFor(() => expect(client.getQueryData<RoomCreateAttempt[]>(roomCreateAttemptsQueryKey))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ status: "failed", coordinates: { latitude: 10, longitude: 20 } }),
+        expect.objectContaining({ status: "pending", coordinates: { latitude: 30, longitude: 40 } })
+      ])));
+
+    const concurrentRoom: PublicRoom = {
+      id: "77777777-7777-4777-8777-777777777777",
+      title: "Concurrent refresh room",
+      latitude: 50,
+      longitude: 60,
+      createdAt: "2026-09-17T10:04:00.000Z"
+    };
+    act(() => {
+      client.setQueryData(roomsQueryKey, (existing: PublicRoom[] | undefined) =>
+        upsertPublicRoom(existing, concurrentRoom)
+      );
+      markerByTitle("Cluj makers").emit("click", {
+        originalEvent: new MouseEvent("click", { detail: 1 })
+      });
+    });
+    const secondRequest = JSON.parse(String(jest.mocked(fetch).mock.calls[1]?.[1]?.body)) as {
+      clientRequestId: string;
+    };
+    await act(async () => resolveSecond(createResponse(201, {
+      id: "88888888-8888-4888-8888-888888888888",
+      title: "Late room",
+      latitude: 30,
+      longitude: 40,
+      createdAt: "2026-09-17T10:06:00.000Z",
+      clientRequestId: secondRequest.clientRequestId
+    })));
+
+    await waitFor(() => expect(client.getQueryData<PublicRoom[]>(roomsQueryKey)?.map((room) => room.id))
+      .toEqual(expect.arrayContaining([concurrentRoom.id, "88888888-8888-4888-8888-888888888888"])));
+    expect(screen.getByRole("heading", { name: "Cluj makers" })).toBeVisible();
+    expect(client.getQueryData<RoomCreateAttempt[]>(roomCreateAttemptsQueryKey)).toEqual([
+      expect.objectContaining({ status: "failed", coordinates: { latitude: 10, longitude: 20 } })
+    ]);
   });
 
   it("keeps room and tile failures observable without blocking map controls", async () => {

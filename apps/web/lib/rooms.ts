@@ -30,3 +30,13 @@ export function upsertPublicRoom(rooms: PublicRoom[] | undefined, room: PublicRo
     : [...existing, canonicalRoom];
   return next.toSorted(comparePublicRooms);
 }
+
+export function mergePublicRooms(
+  existing: PublicRoom[] | undefined,
+  incoming: PublicRoom[]
+) {
+  return incoming.reduce<PublicRoom[]>(
+    (rooms, room) => upsertPublicRoom(rooms, room),
+    existing ?? []
+  );
+}

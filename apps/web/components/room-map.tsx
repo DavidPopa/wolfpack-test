@@ -22,7 +22,8 @@ import {
   RoomCreateError,
   type RoomCreateAttempt
 } from "@/lib/room-create";
-import { fetchPublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
+import { useRoomRealtimeResolution, type RoomRealtimeResolution } from "@/lib/room-realtime";
+import { fetchPublicRooms, mergePublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
 import { AuthPanel } from "./auth-panel";
 import { Button } from "./ui/button";
 
@@ -333,7 +334,11 @@ export function RoomMap() {
   const queryClient = useQueryClient();
   const rooms = useQuery({
     queryKey: roomsQueryKey,
-    queryFn: fetchPublicRooms,
+    queryFn: async () => {
+      const incoming = await fetchPublicRooms();
+      return mergePublicRooms(queryClient.getQueryData(roomsQueryKey), incoming);
+    },
+    refetchOnReconnect: false,
     retry: false
   });
   const createAttempts = useQuery<RoomCreateAttempt[]>({
@@ -369,6 +374,16 @@ export function RoomMap() {
     selectedAttemptIdRef.current = selectedAttemptId;
   }, [selectedAttemptId]);
 
+  const setCurrentSelection = useCallback((next: MapSelection) => {
+    selectionRef.current = next;
+    setSelection(next);
+  }, []);
+
+  const setCurrentAttemptId = useCallback((next: string | null) => {
+    selectedAttemptIdRef.current = next;
+    setSelectedAttemptId(next);
+  }, []);
+
   const roomCreate = useMutation({
     mutationFn: createRoom,
     retry: false,
@@ -385,10 +400,14 @@ export function RoomMap() {
         && currentSelection.coordinates.latitude === variables.latitude
         && currentSelection.coordinates.longitude === variables.longitude
       ) {
-        setSelectedAttemptId(null);
+        setCurrentAttemptId(null);
         applySelection({ kind: "room", roomId: result.room.id }, "restore");
       } else {
-        setSelectedAttemptId((current) => current === variables.clientRequestId ? null : current);
+        setSelectedAttemptId((current) => {
+          const next = current === variables.clientRequestId ? null : current;
+          selectedAttemptIdRef.current = next;
+          return next;
+        });
       }
     },
     onError(error, variables) {
@@ -412,26 +431,30 @@ export function RoomMap() {
   });
 
   const applySelection = useCallback((next: MapSelection, source: SelectionSource, historyMode: "push" | "none" = "push") => {
-    setSelection(next);
-    setSelectedAttemptId(null);
+    setCurrentSelection(next);
+    setCurrentAttemptId(null);
     if (historyMode === "push") {
       const target = urlForMapSelection(new URL(window.location.href), next);
       window.history.pushState(null, "", target);
     }
     if (source === "keyboard") requestAnimationFrame(() => panelHeadingRef.current?.focus());
-  }, []);
+  }, [setCurrentAttemptId, setCurrentSelection]);
 
   const restoreFromUrl = useCallback(() => {
     if (!rooms.isSuccess) return;
     const current = new URL(window.location.href);
     const restored = readMapSelection(current, visibleRooms);
-    setSelection((previous) => mapSelectionEquals(previous, restored) ? previous : restored);
-    setSelectedAttemptId(null);
+    setSelection((previous) => {
+      const next = mapSelectionEquals(previous, restored) ? previous : restored;
+      selectionRef.current = next;
+      return next;
+    });
+    setCurrentAttemptId(null);
     const canonical = urlForMapSelection(current, restored);
     if (`${current.pathname}${current.search}${current.hash}` !== canonical) {
       window.history.replaceState(null, "", canonical);
     }
-  }, [rooms.isSuccess, visibleRooms]);
+  }, [rooms.isSuccess, setCurrentAttemptId, visibleRooms]);
 
   useEffect(() => {
     restoreFromUrl();
@@ -452,12 +475,25 @@ export function RoomMap() {
   const selectAttempt = useCallback((clientRequestId: string, source: SelectionSource) => {
     const attempt = createAttempts.data.find((candidate) => candidate.clientRequestId === clientRequestId);
     if (!attempt) return;
-    setSelection({ kind: "draft", coordinates: attempt.coordinates });
-    setSelectedAttemptId(clientRequestId);
+    setCurrentSelection({ kind: "draft", coordinates: attempt.coordinates });
+    setCurrentAttemptId(clientRequestId);
     const target = urlForMapSelection(new URL(window.location.href), { kind: "draft", coordinates: attempt.coordinates });
     window.history.pushState(null, "", target);
     if (source === "keyboard") requestAnimationFrame(() => panelHeadingRef.current?.focus());
-  }, [createAttempts.data]);
+  }, [createAttempts.data, setCurrentAttemptId, setCurrentSelection]);
+
+  const handleRealtimeResolution = useCallback(({ event, attempt }: RoomRealtimeResolution) => {
+    if (!attempt) return;
+    const currentSelection = selectionRef.current;
+    if (
+      selectedAttemptIdRef.current !== event.clientRequestId
+      || currentSelection.kind !== "draft"
+      || !sameCoordinates(currentSelection.coordinates, attempt.coordinates)
+    ) return;
+    setCurrentAttemptId(null);
+    applySelection({ kind: "room", roomId: event.room.id }, "restore");
+  }, [applySelection, setCurrentAttemptId]);
+  useRoomRealtimeResolution(handleRealtimeResolution);
   const startCreateAttempt = useCallback((mode: "create" | "retry" | "restart") => {
     if (auth.status !== "signed-in" || selection.kind !== "draft") return;
 
@@ -478,13 +514,13 @@ export function RoomMap() {
         ? attempts.map((attempt) => attempt.clientRequestId === clientRequestId ? nextAttempt : attempt)
         : [...attempts, nextAttempt];
     });
-    setSelectedAttemptId(clientRequestId);
+    setCurrentAttemptId(clientRequestId);
     roomCreate.mutate({
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
       clientRequestId
     });
-  }, [auth.status, queryClient, roomCreate, selectedAttemptMatchesDraft, selection]);
+  }, [auth.status, queryClient, roomCreate, selectedAttemptMatchesDraft, selection, setCurrentAttemptId]);
 
   return <div className="map-workspace">
     <div className="map-frame" aria-busy={rooms.isPending}>
