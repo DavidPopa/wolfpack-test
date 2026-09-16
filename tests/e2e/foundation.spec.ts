@@ -1,8 +1,13 @@
 import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
+import { interceptStadiaTiles } from "./map-network";
 
 const require = createRequire(import.meta.url);
 const socketClientPath = require.resolve("socket.io-client/dist/socket.io.js");
+
+test.beforeEach(async ({ page }) => {
+  await interceptStadiaTiles(page);
+});
 
 test("production page and API are available through the proxy", async ({ page, request, baseURL }) => {
   const sessionRequest = page.waitForResponse((response) => response.url().endsWith("/api/auth/get-session"));
@@ -10,7 +15,7 @@ test("production page and API are available through the proxy", async ({ page, r
   const sessionResponse = await sessionRequest;
   expect(sessionResponse.status()).toBe(200);
   expect(await sessionResponse.json()).toBeNull();
-  await expect(page.getByRole("heading", { name: "Join the conversation around you." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Explore rooms around you." })).toBeVisible();
   await expect(page.getByText("Signed out")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await expect(page.getByRole("button", { name: /password|github|apple/i })).toHaveCount(0);
@@ -37,12 +42,13 @@ test("production page and API are available through the proxy", async ({ page, r
   });
 });
 
-test("guest authentication shell remains usable at a mobile viewport", async ({ page }) => {
+test("guest map shell and authentication remain usable at a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const heading = page.getByRole("heading", { name: "Join the conversation around you." });
+  const heading = page.getByRole("heading", { name: "Explore rooms around you." });
   const signIn = page.getByRole("button", { name: "Continue with Google" });
   await expect(heading).toBeVisible();
+  await signIn.scrollIntoViewIfNeeded();
   await expect(signIn).toBeVisible();
   await expect(signIn).toBeInViewport();
 });
