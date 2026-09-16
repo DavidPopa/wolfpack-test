@@ -1,0 +1,4 @@
+# Inactive example for human-started execution agents, not the orchestrator.
+# CLI flags in README.md select these values without changing personal settings.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"

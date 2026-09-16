@@ -1,0 +1,5 @@
+# Local sprint state. Only the two guides and this policy are versionable here.
+*
+!.gitignore
+!README.md
+!AI-README.md
