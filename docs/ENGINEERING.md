@@ -22,6 +22,7 @@ The [PRD](PRD.md) owns stack, architecture, product behavior and exclusions. Do 
 - A pin represents a room; a pending pin has no confirmed room ID. Keep Leaflet/browser-only code out of server execution.
 - Resolve the provided map's tile/style configuration, licensing and attribution before implementing it. No provider substitution without a decision.
 - Prefer labelled native/shadcn controls, visible focus and textual status/error cues. Check panel focus, keyboard use, mobile reflow and polite connection announcements.
+- Theme shadcn/Tailwind through semantic tokens derived from the PRD palette: white, near-black, cool grays, PDF magenta and teal-green. Keep brand swatches available for accents while using contrast-checked darker variants for text, focus, selected controls and solid buttons; color alone must not communicate state.
 - Verify the browser-facing proxy, including WebSocket upgrades, not just internal service URLs.
 - Pin compatible runtimes/package manager; use reproducible multi-stage images and an appropriate `.dockerignore`. Prefer native-dependency compatibility over minimum image size.
 - Keep migrations and cleanup on assigned isolated resources. Store only dummy environment examples; no local volumes, secrets or session artifacts in source control.
