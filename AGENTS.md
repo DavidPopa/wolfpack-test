@@ -40,6 +40,7 @@ Every handoff records base/HEAD, task-owned committed/staged/unstaged/untracked 
 ## PRs, worktrees and parallelism
 
 - One coherent PR scope per task branch/worktree. The implementation agent creates its own branch/worktree as part of the approved task; integration stays with the developer. Inspect existing branches/worktrees first, use a non-conflicting path/name, never force/reset/remove an existing worktree, and never create a temporary commit for setup.
+- Starting with the task after `phase-001-foundation/task-001`, create worktrees under the source checkout at `.worktree/<approved-pr-slug>`, using the approved PR/branch slug as the directory name. Ensure `.worktree/` is ignored by the root repository before creation. The task must record the exact absolute path and runnable commands so the developer can enter that worktree and test the implementation directly. The current foundation worktree at `/Users/dxd/Desktop/wolfpack-test-worktrees/task-001-foundation` is an explicit legacy exception and must not be moved.
 - Foundation comes first. Backend/frontend work can run in parallel after contracts stabilize and ownership is disjoint; cost research can run independently.
 - Root manifests/lockfile, contracts, schema/migrations and Compose/proxy each have one owner at a time. Request cross-owner changes rather than editing concurrently.
 - Dependencies must be available in the assigned checkout. Wait for integration unless the developer explicitly chooses stacked PRs.

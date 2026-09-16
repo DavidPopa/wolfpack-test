@@ -13,7 +13,7 @@ Use `plan-task` for authoring, `execute-task` for authorized implementation, `qa
 
 ## Preflight and boundaries
 
-- First read the packet in the source checkout. Confirm the approved baseline and worktree creation policy, inspect existing worktrees/branches, then create the task's non-conflicting branch/worktree. Record its absolute path and baseline; copy only the task-authorized instruction/packet files. Confirm required context is available there before implementation.
+- First read the packet in the source checkout. Confirm the approved baseline and worktree creation policy, inspect existing worktrees/branches, then create the task's non-conflicting branch/worktree. For tasks after `phase-001-foundation/task-001`, the standard location is `<source-checkout>/.worktree/<approved-pr-slug>` and `.worktree/` must already be ignored. Record its absolute path, baseline, and exact commands the developer can run from that worktree; copy only task-authorized instruction/packet files. Confirm required context is available there before implementation. Do not move the current foundation worktree from its approved legacy path.
 - Require concrete `write_scope`, `do_not_touch`, `context_must_read`, verification commands and acceptance criteria. Empty fields or unresolved assignments mean DRAFT, not permission to improvise.
 - Scope changes require updated task/sitemap/plan approval before affected work. Do not edit another owner's contracts or lockfile to unblock yourself.
 - Edit only the assigned task-owned surfaces and evidence documents. The orchestrator owns the shared sprint board/lock/closeout to avoid parallel writers.
@@ -32,6 +32,7 @@ Read the assigned phase's sprint.md, sitemap.md and plan-lock.md.
 Execute only SPRINTS/<phase>/tasks/task-<id>.md.
 Create its branch/worktree from the approved baseline and location/naming policy.
 Record the actual worktree and packet/report paths; preserve existing work.
+Record the exact commands the developer can use to start and test the project from that worktree.
 Read context_must_read, obey write_scope and do_not_touch, and use the task's skills.
 Stop if the plan is unlocked, required fields are missing or the baseline differs.
 Run the implementation checks and record results in the task, then stop.

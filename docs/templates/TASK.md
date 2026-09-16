@@ -8,11 +8,12 @@ Template: replace placeholders before assignment. This is not an executable task
 - Sprint / task ID / approved plan revision: <phase, task-NNN, revision>
 - Role: implementation / diagnosis-only / QA-only / review-only
 - Model: GPT-5.6 Sol; reasoning: medium; launched manually by the developer
-- Worktree setup: agent creates its own; <approved parent/location policy and branch naming rule>
+- Worktree setup: agent creates `.worktree/<approved-pr-slug>` under the source checkout, named from the approved PR/branch slug; <exact slug and branch naming rule>. Confirm `.worktree/` is ignored before creation. (`phase-001-foundation/task-001` is the only legacy-location exception.)
 - PR base / exact baseline commit: <values>
 - Actual branch / absolute worktree: <agent records after safe creation>
 - Bootstrap instruction/packet files allowed to copy: <exact source paths; no secrets or unrelated dirty code>
 - Canonical task/report paths: <record where later stages and orchestrator read results>
+- Developer test entrypoint: `cd <absolute worktree>` followed by <exact install/start/test commands and required services>
 - Task dependencies and availability: <integrated commit or developer-approved stacked baseline>
 - Integration order: <position in sprint board; not permission for automatic merge>
 - Later QA document: <path>; review document: <path>; do not execute either until separately supplied by the developer
