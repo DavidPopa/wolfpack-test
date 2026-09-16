@@ -1,4 +1,3 @@
-import { AuthPanel } from "@/components/auth-panel";
 import { RoomMap } from "@/components/room-map";
 
 export default function Home() {
@@ -11,13 +10,6 @@ export default function Home() {
         <p>Browse persisted public rooms as a guest. Sign in when you are ready to join the conversation.</p>
       </div>
     </header>
-    <div className="map-layout">
-      <section className="map-stage" aria-labelledby="page-title">
-        <RoomMap />
-      </section>
-      <aside className="account-rail" aria-label="Account controls">
-        <AuthPanel />
-      </aside>
-    </div>
+    <section className="map-stage" aria-labelledby="page-title"><RoomMap /></section>
   </main>;
 }
