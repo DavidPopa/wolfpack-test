@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { Pool } from "pg";
 import { createClient } from "redis";
 import { createApp } from "./app.js";
-import { loadConfig } from "./config.js";
+import { createAuthBoundary, type AuthBoundary } from "./auth.js";
+import { loadConfig, type AuthConfig } from "./config.js";
+import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
 import { createAppServer, type RunningServer } from "./server.js";
 
@@ -21,6 +23,8 @@ export interface RuntimeRedis {
 
 export interface RuntimeDependencies {
   createPool: (databaseUrl: string, timeoutMs: number) => RuntimePool;
+  createPrisma: (databaseUrl: string) => RuntimePrismaClient;
+  createAuthBoundary: (prisma: RuntimePrismaClient, config: AuthConfig) => AuthBoundary | Promise<AuthBoundary>;
   createRedis: (redisUrl: string, timeoutMs: number) => RuntimeRedis;
   createServer: (app: Express) => RunningServer;
 }
@@ -32,6 +36,8 @@ export interface RunningApi {
 
 const defaultDependencies: RuntimeDependencies = {
   createPool: (databaseUrl, timeoutMs) => new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: timeoutMs }),
+  createPrisma: createPrismaClient,
+  createAuthBoundary,
   createRedis: (redisUrl, timeoutMs) => createClient({ url: redisUrl, socket: { connectTimeout: timeoutMs } }),
   createServer: createAppServer
 };
@@ -42,6 +48,7 @@ export async function startApi(
 ): Promise<RunningApi> {
   const config = loadConfig(environment);
   let pool: RuntimePool | undefined;
+  let prisma: RuntimePrismaClient | undefined;
   let redis: RuntimeRedis | undefined;
   let server: RunningServer | undefined;
   let shutdownPromise: Promise<void> | undefined;
@@ -51,6 +58,7 @@ export async function startApi(
       const closers: Promise<unknown>[] = [];
       if (server) closers.push(server.close());
       if (redis?.isOpen) closers.push(redis.quit());
+      if (prisma) closers.push(prisma.$disconnect());
       if (pool) closers.push(pool.end());
       const results = await Promise.allSettled(closers);
       const failures = results.filter((result) => result.status === "rejected");
@@ -61,10 +69,17 @@ export async function startApi(
 
   try {
     pool = dependencies.createPool(config.databaseUrl, config.readinessTimeoutMs);
+    prisma = dependencies.createPrisma(config.databaseUrl);
+    await prisma.$connect();
     redis = dependencies.createRedis(config.redisUrl, config.readinessTimeoutMs);
     redis.on("error", () => undefined);
     await redis.connect();
-    const app = createApp({ probes: createProbeDependencies(pool, redis), readinessTimeoutMs: config.readinessTimeoutMs });
+    const auth = await dependencies.createAuthBoundary(prisma, config.auth);
+    const app = createApp({
+      auth,
+      probes: createProbeDependencies(pool, redis),
+      readinessTimeoutMs: config.readinessTimeoutMs
+    });
     server = dependencies.createServer(app);
     const port = await server.listen(config.port);
     return { port, shutdown };

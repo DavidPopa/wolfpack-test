@@ -1,5 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
 datasource db {
   provider = "postgresql"
 }
 
-// Foundation only: domain models and migrations are intentionally deferred.
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  rooms         Room[]
+  messages      Message[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Room {
+  id              String    @id @default(uuid())
+  title           String
+  latitude        Float
+  longitude       Float
+  creatorId       String
+  createdAt       DateTime  @default(now())
+  clientRequestId String
+  creator         User      @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  messages        Message[]
+
+  @@unique([creatorId, clientRequestId])
+  @@index([createdAt, id])
+  @@map("room")
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  roomId          String
+  authorId        String
+  body            String
+  createdAt       DateTime @default(now())
+  clientRequestId String
+  room            Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  author          User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@unique([authorId, clientRequestId])
+  @@index([roomId, createdAt, id])
+  @@map("message")
+}
