@@ -2,7 +2,7 @@
 
 Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. Visitors will explore public chat rooms placed on a map and read their conversations; authenticated users will create rooms and send messages in real time.
 
-The repository contains the runnable foundation plus the initial Prisma data layer and Google-only Better Auth API lifecycle: Better Auth's core tables and Express handler, authoritative server-side session resolution, persistent session/logout coverage, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Authentication UI, room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
+The repository contains the runnable foundation plus the initial Prisma data layer and Google-only Better Auth lifecycle: Better Auth's core tables and Express handler, authoritative server-side session resolution, persistent sessions, an accessible sign-in/session/logout shell, Room and Message persistence, an Express-owned Prisma client, PostgreSQL 17, Redis 7.4, nginx, and ordered tests. Room/message CRUD, maps, rate limits, and product realtime events are intentionally not implemented yet.
 
 ## Planned features
 
@@ -84,7 +84,7 @@ Google personal and Workspace accounts are accepted; no hosted-domain restrictio
 
 The Next.js app has one Better Auth React client in `apps/web/lib/auth-client.ts`. It deliberately omits an absolute `baseURL` and uses `/api/auth`, so browser session and future sign-in/sign-out calls stay on the application origin through the existing development rewrite or production nginx proxy. `useAuthSession` is a thin projection of Better Auth's reactive session hook into explicit loading, signed-out, signed-in and retryable error states; it does not copy auth state into TanStack Query. Future auth UI must pass callback/return locations through `getSafeReturnTarget` before using them, which preserves only targets on the browser-facing application origin and leaves room for later draft-location restoration.
 
-The focused web tests mock the Better Auth client boundary. They prove client configuration, state projection/retry behavior and return-target validation only; they do not prove the proxy, PostgreSQL sessions or real Google OAuth.
+The web shell renders the reactive loading, guest, session-error and authenticated states from that single session boundary. It offers Google sign-in only, displays the signed-in user's name without exposing their email, and relies on Better Auth's reactive session update after logout. Focused web tests mock the Better Auth client boundary and cover the visible states, keyboard actions, failure recovery and safe return target. Production Chromium covers the guest shell and same-origin proxy session request without navigating to Google. These automated checks do not prove real Google OAuth; that remains a separate sanitized manual smoke when credentials are supplied.
 
 ## Server-side session boundary and auth tests
 
@@ -142,4 +142,4 @@ The project-local Codex `PreToolUse` guard and harmless fixtures live under `.co
 
 ## CI and current limits
 
-PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Automated checks cover auth configuration plus seeded PostgreSQL session resolution/logout; they do not prove real Google OAuth. Authentication UI, maps, room/message HTTP behavior, rate limits, deployment, and cost research remain outside this task.
+PR CI uses a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, change branch protection, or claim a pass until GitHub actually runs it. Automated checks cover auth configuration, seeded PostgreSQL session resolution/logout and the guest authentication shell; they do not prove real Google OAuth. Maps, room/message HTTP behavior, rate limits, deployment, and cost research remain outside this task.
