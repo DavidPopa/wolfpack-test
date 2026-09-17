@@ -1,6 +1,6 @@
 # Final assessment review
 
-Status: **implementation evidence complete on code SHA `98f4a1e9dc2cec669c18ddb5ef76535366b83c52`; task-003 QA concluded `PASS`, and final re-review concluded `ready for final submission` after the authorized REVIEW003-1 correction. This documentation overlay remains uncommitted pending developer publication.**
+Status: **ready for final submission. Implementation evidence is complete on code SHA `98f4a1e9dc2cec669c18ddb5ef76535366b83c52`; task-003 QA concluded `PASS`, final re-review found no open findings, and the reviewed documentation was published to `main` through PRs #5 and #6.**
 
 Date: 2026-09-17.
 
@@ -12,7 +12,7 @@ This is the durable reviewer entrypoint for the Wolfpack Digital assessment and 
 | --- | --- |
 | Final application baseline | `98f4a1e9dc2cec669c18ddb5ef76535366b83c52` on `main`; merge commit for [PR #4](https://github.com/DavidPopa/wolfpack-test/pull/4), merged 2026-09-17. |
 | Baseline CI | [Actions run 35218401579](https://github.com/DavidPopa/wolfpack-test/actions/runs/35218401579), `push`, exact head SHA above. Attempt 1 failed; unchanged attempt 2 concluded `success`. |
-| Documentation branch | `docs/final-submission`, created directly from the baseline SHA. The README/onboarding overlay and this report are currently uncommitted and unstaged; they are not covered by the baseline CI run. |
+| Final documentation | Published from `docs/final-submission` through [PR #5](https://github.com/DavidPopa/wolfpack-test/pull/5) and [PR #6](https://github.com/DavidPopa/wolfpack-test/pull/6). CI passed on the merged `main` snapshot `f321090fb826ef1f05d2c0fa42e944bffe624f2a` in [run 35232531984](https://github.com/DavidPopa/wolfpack-test/actions/runs/35232531984). |
 | Deployment | **NOT_RUN.** No staging or production environment was provisioned, and this report makes no deployment claim. |
 
 The first CI attempt is not green: after the production-browser tests passed, the concurrent realtime scenario timed out after five seconds waiting for an initial marker (`expected 1`, `received 0`); tooling and hooks were consequently skipped. The unchanged failed-job rerun used the same SHA and passed the complete workflow in 4m25s (12:32:59Z–12:37:24Z), including frozen install, migrations, lint, TypeScript, API unit/integration, web Jest, exact `pnpm build`, production Compose, all E2E projects, tooling, hooks and volume-preserving cleanup.
@@ -38,7 +38,7 @@ Primary owners are:
 
 | Requirement | Implemented source entrypoint | Evidence status and boundary |
 | --- | --- | --- |
-| GitHub source and technical PRD | Repository root; [PRD](PRD.md); [PR #4](https://github.com/DavidPopa/wolfpack-test/pull/4) | **PASS** for the merged application SHA. This final documentation delta is not yet committed or published. |
+| GitHub source and technical PRD | Repository root; [PRD](PRD.md); [PR #4](https://github.com/DavidPopa/wolfpack-test/pull/4); final documentation [PR #5](https://github.com/DavidPopa/wolfpack-test/pull/5) and [PR #6](https://github.com/DavidPopa/wolfpack-test/pull/6) | **PASS.** The application and final reviewed documentation are published on `main`. |
 | Public rooms and map pins | `apps/api/src/rooms/`; `apps/web/components/room-map.tsx`; `packages/contracts/src/rooms.ts` | **PASS.** API unit/integration, RTL and production Chromium cover public listing, persisted pins, selection and exact public projection. |
 | Click map to create a room | `room-map.tsx`; `apps/web/lib/room-create.ts`; rooms router/service/repository | **PASS.** Auth gating, optimistic saving/failure/retry, stable request identity, conflicts, concurrent replay and PostgreSQL uniqueness were exercised. Pin selection and dragging do not create another room. |
 | Map appearance, controls and attribution | `apps/web/lib/map-provider.ts`; `room-map.tsx`; `apps/web/app/globals.css`; [map decision](MAP.md) | **PASS** for Leaflet interaction, Watercolor configuration and visible Leaflet/Stadia Maps/Stamen Design/OpenStreetMap attribution. Automated Chromium intercepts tiles; the separate live-localhost boundary is recorded below. |
@@ -50,7 +50,7 @@ Primary owners are:
 | Local setup and dummy-safe configuration | [README](../README.md); [`.env.example`](../.env.example); root scripts; Compose files | **PASS.** A clean worktree used `pnpm install --frozen-lockfile`, committed dummy defaults, Prisma validate/generate/deploy/status, production health/readiness and persistent restart without a populated `.env` or lockfile change. Host Node was 26.7.0 rather than pinned 24.21.0; Docker and CI used 24.21.0. |
 | Ordered tests, hooks and CI | [testing contract](TESTING.md); `.github/workflows/ci.yml`; root `package.json` | **PASS** for the exact merged SHA through CI attempt 2. Phase 004 local evidence separately passed API unit 97/97, API integration 35/35, web 99/99, production Compose/E2E 10/10, tooling 20/20 and hooks; its host `pnpm build` was blocked by local Turbopack `EPERM`, then exact `pnpm build` passed in Linux CI. |
 | Infrastructure and cost estimate | [delivery report](DELIVERY.md#staging-and-production-estimates) | **PASS** as a planning deliverable only. The AWS estimate covers ECS/Fargate, ECR, ALB, RDS PostgreSQL, ElastiCache for Valkey, networking, secrets, observability, DNS/TLS, backups, map service, effort and operating assumptions; it is neither a quote nor deployment evidence. |
-| Self-review with dispositions | Project rules in `AGENTS.md`; `.codex/skills/review/SKILL.md`; this report; [delivery report](DELIVERY.md) | **PASS.** The configured review was run against the integrated application and final documentation snapshot. Task-003 QA concluded `PASS`; REVIEW003-1 was resolved by correcting this report's validation status and checklist; final re-review concluded `ready for final submission`. The exact-SHA baseline CI does not cover this uncommitted documentation overlay. |
+| Self-review with dispositions | Project rules in `AGENTS.md`; `.codex/skills/review/SKILL.md`; this report; [delivery report](DELIVERY.md) | **PASS.** The configured review was run against the integrated application and final documentation snapshot. Task-003 QA concluded `PASS`; REVIEW003-1 was resolved by correcting this report's validation status and checklist; final re-review concluded `ready for final submission`. The reviewed documentation was subsequently published and passed CI on `main`. |
 
 The assessment's optional realtime behavior is implemented. Private rooms, moderation, room/message editing or deletion, attachments, reactions, threads, presence, typing indicators, read receipts, offline sending, search/geolocation, additional auth providers, queues, message caching and horizontal scaling remain intentionally excluded by the PRD.
 
@@ -69,7 +69,7 @@ The smoke retained one empty public room created through supported UI because ro
 
 Frontend unit/RTL tests mock browser boundaries. API integration uses real isolated PostgreSQL, Redis and Node Socket.IO, while controlled command rejection—not a live Redis network outage—proves the fail-closed error mapping. Production Chromium uses the actual built web/proxy; all Stadia requests are intercepted. Its realtime project uses real two-browser Socket.IO transport but `.invalid` fixture identity and in-memory fixture data. None of those substitutes for the real OAuth/live-provider smoke above.
 
-Local evidence proves its recorded snapshot and environment. Only the successful attempt of run 35218401579 proves the complete GitHub workflow for the exact merged SHA; it does not cover this uncommitted documentation overlay.
+Local evidence proves only its recorded snapshot and environment. The successful attempt of run 35218401579 proves the complete GitHub workflow for the exact application SHA; run 35232531984 separately proves the workflow for the published final-documentation snapshot on `main`. Later commits require their own CI evidence.
 
 ## Review findings and remaining risks
 
@@ -124,9 +124,9 @@ Submission checklist:
 
 - [x] Review the complete documentation-only diff and confirm no credential, identity, generated output or unrelated root change entered it.
 - [x] Task-003 QA concluded `PASS`; REVIEW003-1 was corrected and final re-review concluded `ready for final submission`.
-- [ ] Commit/push only with explicit developer authorization, then require CI for that new documentation commit rather than reusing the baseline run.
-- [ ] Confirm final repository links, images and the two onboarding discovery symlinks after checkout.
-- [ ] Keep deployment, Workspace OAuth, public-domain Stadia/commercial approval, screen-reader audit and coverage percentage labelled `NOT_RUN` unless new evidence exists.
+- [x] Publish the reviewed final documentation with explicit developer authorization and record its CI result.
+- [x] Confirm final repository links, images and the two onboarding discovery symlinks after checkout.
+- [x] Keep deployment, Workspace OAuth, public-domain Stadia/commercial approval, screen-reader audit and coverage percentage labelled `NOT_RUN` unless new evidence exists.
 
 ## Onboarding
 

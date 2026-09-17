@@ -1,6 +1,6 @@
 # Map Chat — Technical PRD
 
-Status: Approved by the developer; awaiting developer commit before implementation. Delivery window: 24 hours.
+Historical status at approval: approved by the developer before implementation, with an initial 24-hour delivery window. This records the PRD's starter state; the completed delivery status is maintained in [FINAL_REVIEW.md](FINAL_REVIEW.md).
 
 ## Product and scope
 

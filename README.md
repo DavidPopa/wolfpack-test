@@ -251,7 +251,7 @@ pnpm services:test:stop
 
 `pnpm test:e2e` assigns every `tests/e2e/*.spec.ts` file exactly once. Foundation/map specs use the production proxy at `8081`. The realtime spec uses an isolated, runner-owned proxy at `18081` by default, real browser Socket.IO transport, a production web image, deterministic in-memory fixture APIs and intercepted Stadia tiles. Child failures propagate; interruption and normal completion clean only exact resources owned by the runner.
 
-See [docs/TESTING.md](docs/TESTING.md) for suite coverage, evidence boundaries and runtime safety. Local results do not prove GitHub Actions for another SHA. Real Google OAuth and live Stadia remain `NOT_RUN` until separate sanitized smokes are recorded.
+See [docs/TESTING.md](docs/TESTING.md) for suite coverage, evidence boundaries and runtime safety. Local results do not prove GitHub Actions for another SHA. The final sanitized smokes passed for a personal Google account and live Stadia tiles on localhost; Google Workspace and public-domain Stadia authorization remain `NOT_RUN`. Exact evidence and limitations are recorded in [docs/FINAL_REVIEW.md](docs/FINAL_REVIEW.md).
 
 ## Database operations
 
