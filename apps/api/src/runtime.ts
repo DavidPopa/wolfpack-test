@@ -6,6 +6,8 @@ import { createAuthBoundary, type AuthBoundary } from "./auth.js";
 import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
+import { createPrismaMessageReadRepository, type MessageReadPrismaClient } from "./messages/repository.js";
+import { createMessageHistoryService } from "./messages/service.js";
 import { createWriteRateLimiter, type AtomicRateLimitRedis } from "./rate-limit/index.js";
 import { createSocketRoomEventPublisher } from "./rooms/events.js";
 import { createPrismaRoomCreateRepository, createPrismaRoomReadRepository } from "./rooms/repository.js";
@@ -88,6 +90,9 @@ export async function startApi(
       roomCreation: createRoomCreateService(
         createPrismaRoomCreateRepository(prisma),
         createWriteRateLimiter(redis, config.rateLimit)
+      ),
+      messages: createMessageHistoryService(
+        createPrismaMessageReadRepository(prisma as unknown as MessageReadPrismaClient)
       ),
       roomEvents
     });
