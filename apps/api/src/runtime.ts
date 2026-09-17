@@ -6,6 +6,14 @@ import { createAuthBoundary, type AuthBoundary } from "./auth.js";
 import { loadConfig, type AuthConfig } from "./config.js";
 import { createPrismaClient, type RuntimePrismaClient } from "./prisma.js";
 import { createProbeDependencies } from "./readiness.js";
+import {
+  createPrismaMessageCreateRepository,
+  createPrismaMessageReadRepository,
+  type MessageCreatePrismaClient,
+  type MessageReadPrismaClient
+} from "./messages/repository.js";
+import { createMessageCreateService, createMessageHistoryService } from "./messages/service.js";
+import { createSocketMessageEventPublisher } from "./messages/events.js";
 import { createWriteRateLimiter, type AtomicRateLimitRedis } from "./rate-limit/index.js";
 import { createSocketRoomEventPublisher } from "./rooms/events.js";
 import { createPrismaRoomCreateRepository, createPrismaRoomReadRepository } from "./rooms/repository.js";
@@ -80,6 +88,7 @@ export async function startApi(
     await redis.connect();
     const auth = await dependencies.createAuthBoundary(prisma, config.auth);
     const roomEvents = createSocketRoomEventPublisher();
+    const messageEvents = createSocketMessageEventPublisher();
     const app = createApp({
       auth,
       probes: createProbeDependencies(pool, redis),
@@ -89,10 +98,19 @@ export async function startApi(
         createPrismaRoomCreateRepository(prisma),
         createWriteRateLimiter(redis, config.rateLimit)
       ),
+      messages: createMessageHistoryService(
+        createPrismaMessageReadRepository(prisma as unknown as MessageReadPrismaClient)
+      ),
+      messageCreation: createMessageCreateService(
+        createPrismaMessageCreateRepository(prisma as unknown as MessageCreatePrismaClient),
+        createWriteRateLimiter(redis, config.rateLimit)
+      ),
+      messageEvents,
       roomEvents
     });
     server = dependencies.createServer(app);
     roomEvents.bind(server.io);
+    messageEvents.bind(server.io);
     const port = await server.listen(config.port);
     return { port, shutdown };
   } catch (startupError) {

@@ -1,8 +1,8 @@
 # Testing
 
-This is the integrated testing contract through Phase 003. It covers the foundation, Google-only session boundary, public room listing, authenticated/idempotent room creation, atomic Redis rate limiting, Leaflet room selection, optimistic UI behavior, room Socket.IO delivery, and reconnect reconciliation.
+This is the integrated testing contract for the current rooms, map and chat product. It covers public room/message reads, authenticated idempotent writes, PostgreSQL ordering and uniqueness, Redis rate limits, optimistic UI state, Leaflet interaction, room-scoped Socket.IO delivery, reconnect catch-up, responsive layout and accessibility behavior.
 
-Message history, pagination, message sending/composer behavior, message subscriptions, and message realtime remain Phase 004 work and are not claimed here.
+Focused task evidence is useful during implementation, but only the complete ordered sequence on one exact snapshot can support final local delivery. Real Google OAuth, live Stadia access, local gates, GitHub Actions and deployment are separate evidence classes.
 
 ## Ordered gates
 
@@ -27,117 +27,114 @@ pnpm stack:stop
 pnpm services:test:stop
 ```
 
-| Order | Command | Current responsibility |
+| Order | Command | Responsibility |
 | --- | --- | --- |
-| Setup | `pnpm services:test:up` | Start the isolated `wolfpack-test` PostgreSQL/Redis pair and deploy committed migrations. |
+| Setup | `pnpm services:test:up` | Start isolated `wolfpack-test` PostgreSQL/Redis and deploy committed migrations. |
 | Setup | `pnpm db:validate` | Validate the Prisma schema against the isolated test configuration. |
-| Setup | `pnpm db:generate` | Generate the ignored Prisma client explicitly before consumers run. |
-| Setup | `pnpm exec playwright install chromium` | Install the browser used by the Playwright project. CI uses `--with-deps`. |
-| 1 | `pnpm lint` | ESLint, check-only. |
-| 2 | `pnpm typecheck` | Prisma generation plus contracts, API and web TypeScript checks. |
-| 3a | `pnpm test:api:unit` | Backend Jest unit suites for infrastructure, auth, configuration, room contracts/services/events, and the Redis limiter boundary. |
-| 3b | `pnpm test:api:integration` | Backend Jest against isolated real PostgreSQL/Redis, including auth persistence, schema constraints, public rooms, room creation and real Socket.IO delivery. |
-| 4 | `pnpm test:web` | Frontend Jest/React Testing Library for auth state, room map/selection, optimistic creation and client realtime reconciliation. |
+| Setup | `pnpm db:generate` | Generate the ignored Prisma client explicitly. |
+| Setup | `pnpm exec playwright install chromium` | Install the browser used by Playwright; CI uses `--with-deps`. |
+| 1 | `pnpm lint` | Repository ESLint with zero warnings allowed. |
+| 2 | `pnpm typecheck` | Prisma generation plus contracts, API and web TypeScript. |
+| 3a | `pnpm test:api:unit` | Backend unit/mocked-boundary contracts, services, routers, events and lifecycle. |
+| 3b | `pnpm test:api:integration` | Real isolated PostgreSQL/Redis and real Node Socket.IO client/server integration. |
+| 4 | `pnpm test:web` | Complete web Jest/React Testing Library suite with controlled browser-boundary mocks. |
 | 5 | `pnpm build` | Production contracts, API and Next.js builds. |
-| 6 | `pnpm test:e2e` | Validate complete spec-to-project ownership, run the production and realtime Chromium projects against their isolated origins, aggregate child failures, and clean up the dedicated fixture runtime. |
-| 7 | `pnpm test:tooling` | Node tests for the Codex guard and hook contract. |
-| 8 | `pnpm hooks:check` | The actual Husky entrypoint: lint, types, API unit, API integration, then web Jest. |
+| 6 | `pnpm test:e2e` | Unfiltered aggregate Chromium gate across production and dedicated realtime origins. |
+| 7 | `pnpm test:tooling` | Node tests for the E2E runner, Codex guard and hook contract. |
+| 8 | `pnpm hooks:check` | Actual pre-commit command: lint, types, API unit/integration and web Jest. |
+| Cleanup | `pnpm stack:stop` then `pnpm services:test:stop` | Stop only owned resources while preserving volumes. |
 
-Resolve or diagnose a failed gate before relying on later evidence. Focused commands are useful while implementing a task but never replace the complete integrated sequence. Do not exclude, rename, filter, or skip a collected test to manufacture a full-suite pass.
-
-The root `dev`, `typecheck`, API unit/integration and `build` scripts regenerate the ignored Prisma client before API runtime code consumes it. The explicit `db:generate` setup step keeps generation visible in evidence. `services:test:up` and `test:api:integration` deploy committed migrations idempotently.
+Resolve or diagnose a failed gate before relying on later evidence. Do not exclude, rename, filter or skip a collected test to manufacture a pass. A focused command does not replace its complete suite, and a Docker diagnostic does not silently replace an exact required host command.
 
 ## Suite map
 
 ### Backend unit tests
 
-`jest.config.api.unit.mjs` collects `apps/api/src/**/*.unit.test.ts` and runs serially through the API workspace script. Current tests cover:
+`jest.config.api.unit.mjs` collects `apps/api/src/**/*.unit.test.ts` and runs serially. Current coverage includes:
 
-- health, readiness timeout/redaction, JSON 404 and application-construction boundaries;
-- Google as the only Better Auth provider and identity derived only from a verified session;
-- validated rate-limit configuration, hashed/bounded keys, one atomic Redis evaluation, threshold/retry math, malformed replies and fail-closed provider errors;
-- public room projection, stable `createdAt` then `id` ordering, strict browser-safe contracts and no auth lookup for reads;
-- strict room-create requests and error responses, server-derived titles, replay/conflict ordering, canonical unique-race recovery and persistence-error handling;
-- strict `room.created` payloads and created-only publisher behavior;
-- runtime resource cleanup.
+- health/readiness, configuration redaction and application/runtime cleanup;
+- Google as the only Better Auth provider and server-derived identity;
+- bounded, hashed, atomic room/message limiter behavior and stable retry/error mappings;
+- public room projection and stable room ordering;
+- room creation validation, replay/conflict, uniqueness-race recovery and `room.created` publication;
+- strict public message/privacy contracts, canonical opaque cursor parsing and newest/before/after page behavior;
+- message create normalization, lookup-before-limit idempotency, HTTP status mapping and uniqueness recovery;
+- strict message subscription payloads, one-current-room transitions and created-only `message.created` publication.
 
-These are unit or mocked-boundary assertions. They do not prove PostgreSQL constraints, Redis expiry, browser behavior, network transport, Google OAuth, or the production proxy.
+These tests use mocked dependencies or in-process HTTP boundaries. They do not establish real PostgreSQL constraints, Redis expiry, browser transport, production proxy behavior or Google OAuth.
 
 ### Backend integration tests
 
-`jest.config.api.integration.mjs` collects `apps/api/src/**/*.integration.test.ts`, runs with one worker, and expects the isolated services on PostgreSQL `127.0.0.1:55431` and Redis `127.0.0.1:56381`.
+`jest.config.api.integration.mjs` collects `apps/api/src/**/*.integration.test.ts`, runs one worker and expects PostgreSQL at `127.0.0.1:55431` plus Redis at `127.0.0.1:56381`. Current real-service coverage includes:
 
-Current real-service coverage includes:
+- migrated Better Auth/domain tables, foreign keys, room/message request-ID uniqueness and ordering indexes;
+- persisted session resolution and trusted-origin logout using test-created database records;
+- public room reads and chronological message history with exact public fields;
+- message newest, repeated `before` and repeated `after` traversal, including equal timestamps, empty/unknown rooms and exact cleanup;
+- room/message `201` creation, canonical `200` replay, changed-payload/room `409`, concurrent identical requests and exactly one PostgreSQL row;
+- real Redis increments, expiry/recreation and exact-key cleanup for write limits;
+- protected-write failure when the limiter command rejects, while public reads remain available;
+- real Socket.IO polling/WebSocket clients, room isolation, persistence-before-event, switch/unsubscribe/disconnect and zero events for replay/failure.
 
-- SQL round trips; migrated Better Auth/domain tables; Room/Message foreign keys, request-id uniqueness and ordering indexes;
-- persisted Better Auth session resolution and trusted-origin logout using test-created database records;
-- guest public room reads, exact public fields, and stable room ordering;
-- room creation with session-derived fixture identity, strict validation, server title/precision, sequential replay, conflicting reuse, concurrent identical requests, one canonical PostgreSQL row, rate limiting, and public-read availability when the limiter fails;
-- real Redis concurrent increments, positive expiry, no-expiry repair, expiry/recreation, live sub-second expiry preservation and exact-key cleanup;
-- real Socket.IO polling and WebSocket clients receiving one canonical event for a newly persisted room, with no event for replay/conflict/auth/validation/rate/Redis/database failures and no dependency on connected clients.
-
-The database/session fixtures prove Better Auth persistence and server authority, not a Google provider redirect or callback. Successful limiter state/expiry cases use real Redis; the unavailable-write mapping injects a rejected Redis command at the limiter boundary rather than stopping the Redis container, so it does not prove live network-outage timing.
+The auth fixtures prove the production server boundary and persisted session semantics, not Google consent/redirect/callback. The Redis-outage mapping uses a deliberately rejected atomic command while Redis-backed positive/expiry cases use the real service; it does not measure live network-outage latency.
 
 ### Frontend Jest and React Testing Library
 
-`jest.config.web.mjs` collects `apps/web/**/*.test.tsx` in jsdom. Leaflet, fetch, Better Auth and Socket.IO are mocked at their explicit browser boundaries.
+`jest.config.web.mjs` collects `apps/web/**/*.test.tsx` in jsdom. Leaflet, fetch, Better Auth and Socket.IO are mocked at explicit browser boundaries. Current coverage includes:
 
-Current coverage includes:
+- auth loading/signed-out/signed-in/error behavior, Google-only intent and safe same-origin return targets;
+- room list/map selection, URL/draft restoration and explicit auth-return creation;
+- optimistic room creation, stable retry identity, targeted rollback and late-selection protection;
+- public message newest/empty/error/retry states, multi-page older loading, chronological deduplication and room-switch isolation;
+- same-room scroll anchoring and foreign-room anchor rejection;
+- composer auth gating, normalization, pending/confirmed/failed states, all defined HTTP errors, stable retry versus new attempt IDs and concurrent late outcomes;
+- one socket lifecycle, strict selected-room events, HTTP/socket ordering in both directions, duplicate suppression and targeted attempt resolution;
+- reconnect coalescing, repeated `after` pages, no-edge newest recovery, cancellation on selection change and visible-data preservation on failure;
+- near-bottom auto-follow, non-bottom new-message control/count, one-shot announcements, focus ownership and semantic time/image/plain-text rendering.
 
-- same-origin Better Auth client setup; loading, signed-out, signed-in and recoverable session/action states;
-- safe same-origin callback targets and Google-only sign-in intent;
-- room query loading, empty/error/retry states, strict response parsing and marker reconciliation;
-- persisted marker selection by mouse/keyboard; empty-map drafts; hostile/ambiguous/out-of-range URL rejection; replacement/history behavior; auth-return restoration without automatic writes;
-- room-create `201` and idempotent `200`; validation, `401`, `409`, `429`, `503` and network failure; stable retry IDs; targeted rollback; a second pending attempt; concurrent room updates; and late-result selection protection;
-- strict room-event parsing, socket-before-HTTP and HTTP-before-socket convergence, duplicate suppression, stale-GET merging, one client/listener lifecycle, cleanup, coalesced reconnect refresh and multiple missed-room recovery.
-
-RTL demonstrates component/cache behavior under controlled mocks. It does not prove Leaflet rendering, real services, Socket.IO network transport, Google OAuth, or the production proxy.
+RTL establishes deterministic component/query/cache behavior under controlled mocks. It does not prove real Leaflet layout, network transport, PostgreSQL/Redis, production nginx, live provider access or Google OAuth.
 
 ### Chromium E2E
 
-`playwright.config.ts` assigns every `tests/e2e/*.spec.ts` file to exactly one named Chromium project. `scripts/run-e2e.mjs` verifies that assignment against the files on disk before running either project.
+`playwright.config.ts` assigns every `tests/e2e/*.spec.ts` file to exactly one named project. `scripts/run-e2e.mjs` validates the files on disk before either project runs.
 
-- `production-chromium` uses `http://127.0.0.1:8081` by default. `tests/e2e/foundation.spec.ts` checks the production page, anonymous same-origin auth request, health/JSON 404, disabled password signup, mobile auth reachability, and Socket.IO polling plus forced WebSocket through nginx. `tests/e2e/map.spec.ts` uses real production Leaflet with deterministic intercepted room/session responses and checks persisted pins, exact visible attribution, zoom cap, selection/draft exclusivity, wrapped longitude, URL/auth-return restoration, keyboard focus and desktop/mobile reflow.
-- `realtime-chromium` uses `http://127.0.0.1:18081` by default and contains only `tests/e2e/room-realtime.spec.ts`. The root runner starts `tests/e2e/room-realtime-fixture.mjs`, a second container from the exact image ID currently tagged `wolfpack-web:latest`, and the nginx template in `tests/e2e/room-realtime.nginx.conf` on one task-owned bridge network. Stable aliases connect the three containers without a host gateway; only nginx publishes a loopback port. The scenario proves real browser Socket.IO transport, one event in both contexts, missed-room reconnect recovery, deduplication and selection retention. Its HTTP/session persistence is in-memory and it does not use PostgreSQL, Redis, Better Auth, or Google.
+- `production-chromium` defaults to `http://127.0.0.1:8081`. `foundation.spec.ts` covers the production page, anonymous same-origin session request, API health/JSON 404, disabled password signup, mobile auth reachability and Socket.IO polling/WebSocket through nginx. `map.spec.ts` uses production Leaflet with deterministic room/session responses and intercepted tiles to cover persisted pins, exact visible attribution, zoom, selection/draft exclusivity, wrapped longitude, URL/auth-return restoration, explicit room creation, keyboard focus and desktop/mobile reflow.
+- `realtime-chromium` defaults to `http://127.0.0.1:18081` and owns `room-realtime.spec.ts`. The runner creates an isolated bridge network, fixture/API container, production web-image container and nginx proxy. The scenario uses independent desktop/mobile contexts and real browser Socket.IO to cover message arrival in both HTTP/socket orders, exactly-once display, room isolation, optimistic confirmation/failure retry, selection retention, 31 missed messages recovered across two forward pages, older-page anchoring, reader-controlled live scrolling and viewport overflow checks.
 
-All current browser scenarios call `interceptStadiaTiles` from `tests/e2e/map-network.ts`; external Stadia requests receive an in-memory neutral tile. Chromium therefore proves URL construction, Leaflet integration, visible attribution and UI behavior without proving live Stadia availability, limits or domain authentication.
+The realtime fixture uses `.invalid` identity plus in-memory room/message/session state. It is test-only and is not imported by production. Its browser transport is real, but its persistence/auth is not PostgreSQL, Redis, Better Auth or Google.
 
-The unfiltered `pnpm test:e2e` command is the aggregate gate. It requires the separately started `wolfpack` production proxy, collision-checks the configurable realtime proxy port plus all container/network names, then runs both projects without a file or grep filter. A child failure or fixture startup error makes the root command non-zero. On `SIGINT`/`SIGTERM`, the runner terminates and awaits the in-flight owned Playwright/failure process group before `finally` cleanup. Cleanup verifies recorded Docker IDs before removing the three containers and network, preventing a same-name replacement from being removed. Tooling tests fail when a new spec lacks an owner, when the realtime project is omitted, when child status is swallowed, when the container-only topology regresses, or when abort/cleanup escapes recorded ownership.
+Every Chromium scenario installs `interceptStadiaTiles` before navigation. Tests therefore prove Leaflet URL construction, rendering integration, attribution and UI behavior without proving live Stadia authentication, availability, quotas or licensing eligibility.
+
+The unfiltered `pnpm test:e2e` command runs both projects. It requires the separately started production proxy, verifies every current spec has exactly one owner, refuses occupied/unknown fixture resources, resolves the exact images currently tagged by the production build, propagates child failures, terminates an in-flight owned child process group on interruption and removes only exact recorded fixture container/network IDs in `finally`. It never stops the production stack or removes a volume.
 
 ## Evidence boundaries
 
-| Evidence | What it can establish | What it cannot establish |
+| Evidence | Establishes | Does not establish |
 | --- | --- | --- |
-| Static source/config audit | Wiring, strict schemas, configured paths/providers, exclusions and absence of obvious secret/scope drift | Runtime behavior |
-| API unit Jest | Business/control-flow behavior at mocked dependencies | Real PostgreSQL, Redis, sockets or proxy |
-| API integration Jest | Real PostgreSQL/Redis state and real Socket.IO server/client behavior exercised by those suites | Google OAuth, live browser UI, live Redis network outage timing |
-| Web RTL | UI/cache/state/error behavior with mocked external boundaries | Real Leaflet, proxy, transport, provider or OAuth |
-| Production Chromium | Browser layout/interaction and whichever real proxy/transport boundaries the scenario actually uses | Unmocked dependencies that the scenario intercepts or fixtures |
-| Fixture/test session | Session-shaped behavior or persisted test-session resolution | Real Google consent, redirect, callback or account login |
-| Intercepted Stadia tiles | Deterministic map rendering and visible attribution | Live provider access, authentication, licensing eligibility or quotas |
-| Local ordered gates | Result for the recorded local snapshot and environment | PR CI or another commit |
-| GitHub Actions run | CI result only for its recorded SHA/workflow run | Real OAuth/live provider unless explicitly added and evidenced |
-| Coverage-enabled run | Coverage for the collected/instrumented files in that run | Any arbitrary quota without a recorded coverage command |
+| Static source/config audit | Wiring, schemas, documented paths/configuration and absence of obvious scope/secret drift | Runtime behavior |
+| API unit Jest | Business and HTTP/event control flow at mocked boundaries | Real database, Redis, transport, proxy or OAuth |
+| API integration Jest | Real PostgreSQL/Redis state and real Node Socket.IO transport exercised by those suites | Browser behavior, Google OAuth or live provider access |
+| Web RTL | UI/cache/error/race behavior under controlled mocks | Real layout, services, browser transport, proxy or OAuth |
+| Production Chromium | Browser/UI and the actual proxy/transport boundary used by each scenario | Any intercepted or fixture-backed external dependency |
+| Fixture/test session | Session-shaped or persisted test-session behavior | Google consent, redirect, callback or account login |
+| Intercepted Stadia tiles | Deterministic map integration and visible attribution | Live provider access, domain authentication or quotas |
+| Local ordered gates | The recorded local snapshot/environment | PR CI or a different commit |
+| GitHub Actions run | The recorded SHA and workflow run | OAuth/live-provider behavior unless explicitly added |
+| Coverage-enabled run | Coverage for collected/instrumented files in that command | A general coverage claim from ordinary gates |
 
-Real Google OAuth is `NOT_RUN` unless a separate sanitized smoke records the configured origin/callback, account class, login/session/logout result and exact tested snapshot without exposing credentials or cookies. Automated auth tests and fixture sessions must never be relabelled as that smoke.
+Real Google OAuth is `NOT_RUN` unless a separate sanitized smoke records origin/callback, account class, login/session/logout result and tested SHA without credentials, cookies or tokens. Live Stadia is similarly `NOT_RUN` unless a separately authorized browser smoke uses the approved configuration.
 
-## Runtime ownership and safety
+## Runtime ownership and cleanup
 
-- Inspect existing worktrees, containers and listeners before starting services. Stop on an ownership collision; never stop, rebuild or reuse another worktree's runtime as evidence.
-- `pnpm services:test:up` owns Compose project `wolfpack-test`, PostgreSQL `127.0.0.1:55431`, Redis `127.0.0.1:56381`, and tmpfs-backed service data for that run.
-- `pnpm stack:up` owns Compose project `wolfpack` and publishes only nginx at `127.0.0.1:8081`. Use it only when the project/port is free and assigned to the current run.
-- `pnpm test:e2e` verifies the production origin and owns only its dedicated realtime defaults: internal fixture/web ports `4108`/`3108`, loopback proxy `127.0.0.1:18081`, containers `wolfpack-e2e-realtime-fixture` / `-web` / `-proxy`, and network `wolfpack-e2e-realtime`. Override the matching `ROOM_REALTIME_*` ports/names/network together for an isolated worktree. Existing proxy listeners, containers or networks are collisions, never reusable evidence. Fixture/web ports are not published to the host.
-- Preserve the production `postgres-data` volume. Stop owned services with `pnpm stack:stop` and `pnpm services:test:stop`; never use `down --volumes`, database reset, Redis `FLUSH*`, pruning, or broad wildcard cleanup.
-- Test fixtures must use unique/scoped identifiers. Delete only exact task-owned rows, keys, containers, processes, reports and traces. Never clean another worktree's resources.
-- Automated browser tests must retain deterministic Stadia interception. Do not introduce live provider traffic into the standard suite.
+- Inspect worktrees, containers and listeners before mutation. Stop on any ownership collision; never reuse another checkout's runtime as evidence.
+- `pnpm services:test:up` owns Compose project `wolfpack-test`, PostgreSQL `127.0.0.1:55431` and Redis `127.0.0.1:56381`. Tests use exact SQL fixtures and scoped Redis prefixes.
+- `pnpm stack:up` owns Compose project `wolfpack` and publishes only nginx at `127.0.0.1:8081`. Preserve `wolfpack_postgres-data`.
+- `pnpm test:e2e` owns only its configurable realtime proxy/container/network set. Defaults are proxy `127.0.0.1:18081`, internal ports `4108`/`3108`, containers `wolfpack-e2e-realtime-fixture`, `wolfpack-e2e-realtime-web`, `wolfpack-e2e-realtime-proxy`, and network `wolfpack-e2e-realtime`. Override the matching `ROOM_REALTIME_*` names/ports together.
+- Stop with `pnpm stack:stop` and `pnpm services:test:stop`. Never use `down --volumes`, reset a database, run Redis `FLUSH*`, prune broadly or delete another task's reports/traces.
 - Do not print or retain credentials, OAuth tokens, cookies, real environment values or session files in logs, screenshots, traces or reports.
 
-## Evidence and failure handling
+## Evidence recording and failures
 
-Record the tested base/HEAD, branch/worktree, dirty files, timestamp, runtime versions, service identifiers, exact command, exit status, collected suites/tests and sanitized artifacts. Inspect collected files and counts rather than relying only on a zero exit code.
+Record base/HEAD, branch/worktree, dirty paths, timestamp, runtime versions, ownership, exact command/exit, collected suites/tests and sanitized artifacts. Inspect collection instead of trusting only exit zero.
 
-No empty-suite success, `--passWithNoTests`, broad skips, error suppression, weakened assertions or imported historical output may be used to get green results. Verify that integration tests are collected despite ignore rules and that every Playwright file receives its required runtime. Coverage claims require a coverage-enabled command; the standard gates do not establish a coverage percentage.
-
-A failed gate remains `FAIL` or `BLOCKED` until the exact cause is corrected and the affected sequence reruns. A pinned Docker build may diagnose a host-only build problem but does not silently convert the required host `pnpm build` command to PASS. Historical task evidence may guide diagnosis but cannot replace a failed integrated command.
-
-Use [the QA template](templates/QA.md) for task evidence. Keep implementer self-check, independent review, local gates, PR CI, real services, fixtures, provider smokes and real OAuth explicitly distinct.
+A failed gate remains `FAIL` or `BLOCKED` until corrected and rerun. No `--passWithNoTests`, broad skip, hidden filter, assertion weakening or historical output may substitute for current evidence. Final task-008 QA owns the complete ordered sequence on the final stacked snapshot; task-level passes remain useful but cannot replace it.

@@ -1,4 +1,6 @@
 import {
+  type MessageCreatedEventPayload,
+  type MessageRoomSubscription,
   roomCreatedEventPayloadSchema,
   type RoomCreatedEventPayload
 } from "@map-chat/contracts";
@@ -6,15 +8,21 @@ import type { Server as SocketServer } from "socket.io";
 
 export const ROOM_CREATED_EVENT = "room.created";
 
-export type ClientToServerEvents = Record<never, never>;
+export interface ClientToServerEvents {
+  "message.subscribe": (payload: MessageRoomSubscription) => void;
+  "message.unsubscribe": (payload: MessageRoomSubscription) => void;
+}
 
 export interface ServerToClientEvents {
   [ROOM_CREATED_EVENT]: (payload: RoomCreatedEventPayload) => void;
+  "message.created": (payload: MessageCreatedEventPayload) => void;
 }
 
 export type InterServerEvents = Record<never, never>;
 
-export type SocketData = Record<string, never>;
+export interface SocketData {
+  messageRoomId?: string;
+}
 
 export type RoomSocketServer = SocketServer<
   ClientToServerEvents,

@@ -22,9 +22,15 @@ import {
   RoomCreateError,
   type RoomCreateAttempt
 } from "@/lib/room-create";
-import { useRoomRealtimeResolution, type RoomRealtimeResolution } from "@/lib/room-realtime";
+import {
+  useMessageRoomRealtime,
+  useRoomRealtimeResolution,
+  type RoomRealtimeResolution
+} from "@/lib/room-realtime";
 import { fetchPublicRooms, mergePublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
-import { AuthPanel } from "./auth-panel";
+import { AuthPanel, signInWithGoogle } from "./auth-panel";
+import { MessageHistoryPanel } from "./message-history-panel";
+import { MessageComposer } from "./message-composer";
 import { Button } from "./ui/button";
 
 type LeafletModule = typeof Leaflet;
@@ -358,6 +364,7 @@ export function RoomMap() {
     () => selection.kind === "room" ? visibleRooms.find((room) => room.id === selection.roomId) ?? null : null,
     [selection, visibleRooms]
   );
+  useMessageRoomRealtime(selectedRoom?.id ?? null);
   const selectedAttempt = useMemo(
     () => selectedAttemptId ? createAttempts.data.find((attempt) => attempt.clientRequestId === selectedAttemptId) ?? null : null,
     [createAttempts.data, selectedAttemptId]
@@ -556,8 +563,8 @@ export function RoomMap() {
         </h2>
         {selectedRoom && <div className="room-panel__state">
           <p className="state-label state-label--selected"><span aria-hidden="true">✓</span> Selected persisted room</p>
-          <p>Messages for this room will appear here in a future step.</p>
-          <p className="empty-state">No messages are available in this room shell yet.</p>
+          <MessageHistoryPanel roomId={selectedRoom.id} />
+          <MessageComposer roomId={selectedRoom.id} auth={auth} onSignIn={signInWithGoogle} />
         </div>}
         {selection.kind === "draft" && <div className="room-panel__state">
           {selectedAttemptMatchesDraft?.status === "pending"

@@ -43,7 +43,7 @@ it("creates one Prisma client from the validated URL and disconnects it on shutd
   };
   const runningServer: RunningServer = {
     httpServer: undefined as never,
-    io: undefined as never,
+    io: { on: jest.fn() } as never,
     listen: jest.fn(async () => 4000),
     close: jest.fn(async () => undefined)
   };

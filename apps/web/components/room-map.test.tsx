@@ -2,7 +2,7 @@ import type { PublicRoom } from "@map-chat/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { PropsWithChildren } from "react";
+import type { ComponentType, PropsWithChildren } from "react";
 import type { AuthSession } from "@/lib/auth-client";
 import type { AuthSessionState } from "@/lib/auth-session";
 import { useAuthSession } from "@/lib/auth-session";
@@ -106,7 +106,14 @@ jest.mock("@/lib/rooms", () => ({
   ...jest.requireActual("@/lib/rooms"),
   fetchPublicRooms: jest.fn()
 }));
-jest.mock("./auth-panel", () => ({ AuthPanel: () => <section aria-label="Account controls">Mock account controls</section> }));
+jest.mock("./auth-panel", () => ({
+  AuthPanel: () => <section aria-label="Account controls">Mock account controls</section>,
+  signInWithGoogle: jest.fn(async () => undefined)
+}));
+const mockMessageHistoryPanel = jest.fn((_props: { roomId: string }) => <p role="status">No messages in this room yet.</p>);
+jest.mock("./message-history-panel", () => ({
+  MessageHistoryPanel: (props: { roomId: string }) => mockMessageHistoryPanel(props)
+}));
 
 const rooms = [
   {
@@ -152,7 +159,7 @@ function renderRoomMap() {
 }
 
 function createResponse(status: number, body: unknown): Response {
-  return { status, json: async () => body } as Response;
+  return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
 }
 
 function successfulRoomResponse(status: 200 | 201, id: string, title: string) {
@@ -206,6 +213,8 @@ beforeEach(() => {
   mockMapInstance.getZoom.mockReturnValue(13);
   mockUseAuthSession.mockReturnValue(signedOutState);
   mockFetchPublicRooms.mockResolvedValue(rooms);
+  mockMessageHistoryPanel.mockReset();
+  mockMessageHistoryPanel.mockImplementation(() => <p role="status">No messages in this room yet.</p>);
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
     writable: true,
@@ -231,7 +240,7 @@ describe("room map selection and draft state", () => {
     act(() => firstMarker.emit("click", { originalEvent: new MouseEvent("click", { detail: 1 }) }));
     expect(screen.getByRole("heading", { name: "Cluj makers" })).toBeVisible();
     expect(screen.getByText("Selected persisted room")).toBeVisible();
-    expect(screen.getByText("No messages are available in this room shell yet.")).toBeVisible();
+    expect(await screen.findByText("No messages in this room yet.")).toBeVisible();
     expect(new URL(window.location.href).searchParams.get("room")).toBe(firstRoom.id);
     expect(new URL(window.location.href).searchParams.get("draft")).toBeNull();
     expect(mockMarkerInstances.some((marker) => marker.options.title === "Unsaved room location")).toBe(false);
@@ -244,6 +253,75 @@ describe("room map selection and draft state", () => {
     expect(screen.getByRole("heading", { name: "Quiet library" })).toHaveFocus();
     expect(new URL(window.location.href).searchParams.get("room")).toBe(secondRoom.id);
     expect(new URL(window.location.href).searchParams.get("draft")).toBeNull();
+  });
+
+  it("shows the guest composer only for a confirmed room and removes it for a draft", async () => {
+    renderRoomMap();
+    await waitForRooms();
+
+    act(() => markerByTitle("Cluj makers").emit("click", {
+      originalEvent: new MouseEvent("click", { detail: 1 })
+    }));
+    expect(screen.getByRole("region", { name: "Message composer" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Message" })).not.toBeInTheDocument();
+
+    act(() => mapClick(10, 20));
+    expect(screen.queryByRole("region", { name: "Message composer" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a late initial retry isolated after selecting another room", async () => {
+    const { MessageHistoryPanel } = jest.requireActual("./message-history-panel") as {
+      MessageHistoryPanel: ComponentType<{ roomId: string }>;
+    };
+    mockMessageHistoryPanel.mockImplementation((props) => <MessageHistoryPanel {...props} />);
+    let resolveRoomARetry!: (response: Response) => void;
+    jest.mocked(fetch)
+      .mockResolvedValueOnce(createResponse(503, { error: { code: "UNAVAILABLE" } }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRoomARetry = resolve; }))
+      .mockResolvedValueOnce(createResponse(200, {
+        messages: [{
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          roomId: secondRoom.id,
+          body: "Room B current history",
+          createdAt: "2026-09-17T11:00:00.000Z",
+          author: { name: "Blair", image: null }
+        }],
+        pageInfo: { startCursor: "room_b_start", endCursor: "room_b_end", hasOlder: false, hasNewer: false }
+      }));
+    renderRoomMap();
+    await waitForRooms();
+    const user = userEvent.setup();
+
+    act(() => markerByTitle("Cluj makers").emit("click", {
+      originalEvent: new MouseEvent("click", { detail: 1 })
+    }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Messages could not be loaded");
+    await user.click(screen.getByRole("button", { name: "Retry loading messages" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+    act(() => markerByTitle("Quiet library").emit("click", {
+      originalEvent: new MouseEvent("click", { detail: 1 })
+    }));
+    expect(await screen.findByText("Room B current history")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Quiet library" })).toBeVisible();
+    expect(new URL(window.location.href).searchParams.get("room")).toBe(secondRoom.id);
+
+    await act(async () => resolveRoomARetry(createResponse(200, {
+      messages: [{
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        roomId: firstRoom.id,
+        body: "Late room A retry history",
+        createdAt: "2026-09-17T10:00:00.000Z",
+        author: { name: "Avery", image: null }
+      }],
+      pageInfo: { startCursor: "room_a_start", endCursor: "room_a_end", hasOlder: false, hasNewer: false }
+    })));
+
+    await waitFor(() => expect(screen.queryByText("Late room A retry history")).not.toBeInTheDocument());
+    expect(screen.getByText("Room B current history")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Quiet library" })).toBeVisible();
+    expect(new URL(window.location.href).searchParams.get("room")).toBe(secondRoom.id);
   });
 
   it("creates and replaces one local draft only from empty map clicks", async () => {
