@@ -48,6 +48,14 @@ The local sprint workspace keeps the delivery phases visible while giving every 
   </tr>
 </table>
 
+### Docker environments
+
+<p align="center">
+  <img src="docs/images/docker-environments.png" width="760" alt="Docker Desktop showing the isolated wolfpack production and wolfpack-test integration environments">
+  <br>
+  <sub>Separate Compose projects keep the production-like application and integration-test services isolated.</sub>
+</p>
+
 ### Stack at a glance
 
 | Area | Technical direction |
@@ -78,6 +86,41 @@ Map Chat is a full-stack map-based public chat application built for the Wolfpac
 The client handles optimistic room and message creation without putting temporary objects into canonical server caches. Stable client request IDs make retries idempotent, HTTP/socket arrival in either order deduplicates by canonical identity, and reconnect catch-up walks every newer message page for the currently selected room. The responsive interface preserves room selection, drafts, reading position and keyboard focus across late requests and realtime recovery.
 
 The map uses Leaflet with the approved Stadia Maps-hosted Stamen Watercolor tiles and visible Stadia Maps, Stamen Design, OpenStreetMap and Leaflet attribution. [docs/MAP.md](docs/MAP.md) is the source of truth for provider configuration and licensing.
+
+## Product walkthrough
+
+<p align="center">
+  <img src="docs/images/map-chat-overview.png" width="100%" alt="Map Chat public room map and signed-out experience">
+  <br>
+  <sub>Browse persisted public rooms and conversations without signing in.</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/map-chat-draft.png" width="100%" alt="Unsaved room location selected by a signed-out visitor">
+      <br>
+      <sub>A guest can choose a room location before authentication.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/map-chat-authenticated.png" width="100%" alt="Authenticated session with a restored room draft">
+      <br>
+      <sub>Google sign-in restores the draft and unlocks room creation.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/images/map-chat-conversation.png" width="100%" alt="Persisted room with public history and message composer">
+      <br>
+      <sub>Persisted rooms expose public history and authenticated messaging.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/images/map-chat-realtime.png" width="100%" alt="The same room conversation synchronized across two browser sessions">
+      <br>
+      <sub>Two browser sessions receive the same room conversation in real time.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Product boundary
 
