@@ -1,3 +1,76 @@
+# Read First
+
+> A short note about how I approached the assessment, including my use of AI-assisted development.
+>
+> **More details are available in [Documentation and onboarding](docs/ONBOARDING.md).** In Codex, open `/skills` and select `onboard-project` for a repository tour or `onboard-developer` for a guided, role-based journey.
+
+I genuinely enjoyed working on this project. I especially appreciated the care put into the PDF and its UX direction, so I treated it as part of the product specification and carried its visual identity into the application.
+
+## My approach
+
+I deliberately kept the product and architecture focused. The complete journey is simple: explore the public map, select a room, sign in with Google when a write is required, create a pin, chat, and sign out. I avoided speculative abstractions and layers that would not provide a clear benefit for this scope.
+
+I invested additional time in verification because testing is an essential part of a complete application. The project exercises the frontend, backend, PostgreSQL, Redis, realtime behavior, production proxy, and browser-level user flows.
+
+## AI-assisted workflow
+
+I used GPT transparently throughout development:
+
+1. **Architecture:** GPT-6 Astra supported the initial architecture and technical trade-off discussions.
+2. **Orchestration:** GPT-5.6 Sol High prepared bounded sprints and tasks through the project-specific `/create-sprint` and `/create-task` skills. It did not implement application code.
+3. **Execution:** for each task, I launched a GPT-5.6 Sol Medium agent and separated the work into implementation, QA, and written review.
+4. **Quality gate:** every stage concluded with `ready for phase continuation`, `changes required`, or `blocked`. A later task could not begin until the previous one was completed and reviewed.
+
+I remained responsible for product decisions, approvals, Git operations, and the final result.
+
+## Engineering workflow
+
+- **Sprints, worktrees, and pull requests** kept each change isolated and the Git history easy to follow.
+- **Project-specific skills and hooks** remained intentionally small and focused. In a production team, shared skills, hooks, agents, and MCP integrations would live in a dedicated team repository.
+- **Docker environments** made application and integration-test behavior reproducible while keeping runtime failures easier to isolate.
+
+### Sprint workspace
+
+The local sprint workspace keeps the delivery phases visible while giving every task separate implementation, QA, and review records.
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/images/sprints-overview.png" width="300" alt="Five project phases in the SPRINTS workspace">
+    </td>
+    <td align="center">
+      <img src="docs/images/phase-packet-structure.png" width="190" alt="Task, QA, and review documents inside a sprint phase">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Five bounded delivery phases</sub></td>
+    <td align="center"><sub>Separate task, QA, and review packets</sub></td>
+  </tr>
+</table>
+
+### Stack at a glance
+
+| Area | Technical direction |
+| --- | --- |
+| Frontend | Next.js, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query, Leaflet |
+| Backend | Node.js, Express modular monolith, Better Auth, Socket.IO |
+| Data | PostgreSQL with Prisma, Redis rate limiting |
+| Verification | Jest, React Testing Library, Playwright Chromium, Docker Compose |
+
+## Key technical decisions
+
+### Why Better Auth
+
+I chose Better Auth because it integrates directly into the Express application and stores users, sessions, accounts, and verification data in the project's own PostgreSQL database through Prisma. This avoids introducing a separate hosted identity-data layer or synchronizing application users through provider webhooks. Google remains the external OAuth provider, while session persistence and application authentication data stay within the system I control. See the [Better Auth database documentation](https://better-auth.com/docs/concepts/database) for the underlying model.
+
+### Why vertical slices
+
+I used a [vertical-slice approach](https://monday.com/blog/rnd/vertical-slice/) as a delivery principle: each increment aimed to complete a small user-facing capability across the relevant UI, API, persistence, realtime, and test boundaries before moving forward. This kept attention on working outcomes instead of building broad technical layers in isolation.
+
+After learning how the team organizes feature delivery, I chose this approach to align the assessment with that environment and to demonstrate how I would structure, validate, and communicate work within the company.
+
+---
+
 # Map Chat
 
 Map Chat is a full-stack map-based public chat application built for the Wolfpack Digital developer assessment. Visitors can browse persisted room pins and read paginated conversations. Google-authenticated users can create rooms and send plain-text messages. PostgreSQL is authoritative for rooms, messages and sessions; Redis provides atomic write-rate limits; Socket.IO delivers newly persisted rooms and room-scoped messages through the same browser origin.
@@ -161,6 +234,8 @@ The GitHub Actions workflow performs a frozen install, starts isolated services,
 
 ## Documentation
 
+- [Final assessment review](docs/FINAL_REVIEW.md)
+- [Documentation and onboarding](docs/ONBOARDING.md)
 - [Technical PRD](docs/PRD.md)
 - [Engineering notes](docs/ENGINEERING.md)
 - [Testing contract](docs/TESTING.md)
