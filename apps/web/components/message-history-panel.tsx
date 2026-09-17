@@ -1,11 +1,12 @@
 "use client";
 
-import type { PublicMessage } from "@map-chat/contracts";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import type { MessageHistoryResponse, PublicMessage } from "@map-chat/contracts";
+import { useInfiniteQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   fetchMessageHistoryPage,
   flattenMessageHistory,
+  mergeNewestMessagePage,
   messageHistoryQueryKey
 } from "@/lib/message-history";
 import { Button } from "./ui/button";
@@ -33,18 +34,29 @@ function AuthorImage({ message }: { message: PublicMessage }) {
 }
 
 export function MessageHistoryPanel({ roomId }: { roomId: string }) {
+  const queryClient = useQueryClient();
   const history = useInfiniteQuery({
     queryKey: messageHistoryQueryKey(roomId),
-    queryFn: ({ pageParam, signal }) => fetchMessageHistoryPage({
-      roomId,
-      signal,
-      ...(pageParam ? { before: pageParam } : {})
-    }),
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await fetchMessageHistoryPage({
+        roomId,
+        signal,
+        ...(pageParam ? { before: pageParam } : {})
+      });
+      if (pageParam) return page;
+      return mergeNewestMessagePage(
+        page,
+        queryClient.getQueryData<InfiniteData<MessageHistoryResponse, string | null>>(
+          messageHistoryQueryKey(roomId)
+        )
+      );
+    },
     initialPageParam: null as string | null,
     getPreviousPageParam: (firstPage) => firstPage.pageInfo.hasOlder
       ? firstPage.pageInfo.startCursor ?? undefined
       : undefined,
     getNextPageParam: () => undefined,
+    refetchOnReconnect: false,
     retry: false
   });
   const messages = useMemo(

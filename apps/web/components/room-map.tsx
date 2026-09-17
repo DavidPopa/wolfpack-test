@@ -22,7 +22,11 @@ import {
   RoomCreateError,
   type RoomCreateAttempt
 } from "@/lib/room-create";
-import { useRoomRealtimeResolution, type RoomRealtimeResolution } from "@/lib/room-realtime";
+import {
+  useMessageRoomRealtime,
+  useRoomRealtimeResolution,
+  type RoomRealtimeResolution
+} from "@/lib/room-realtime";
 import { fetchPublicRooms, mergePublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
 import { AuthPanel, signInWithGoogle } from "./auth-panel";
 import { MessageHistoryPanel } from "./message-history-panel";
@@ -360,6 +364,7 @@ export function RoomMap() {
     () => selection.kind === "room" ? visibleRooms.find((room) => room.id === selection.roomId) ?? null : null,
     [selection, visibleRooms]
   );
+  useMessageRoomRealtime(selectedRoom?.id ?? null);
   const selectedAttempt = useMemo(
     () => selectedAttemptId ? createAttempts.data.find((attempt) => attempt.clientRequestId === selectedAttemptId) ?? null : null,
     [createAttempts.data, selectedAttemptId]
