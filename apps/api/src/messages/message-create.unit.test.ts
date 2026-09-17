@@ -7,6 +7,7 @@ import {
 import request from "supertest";
 import { createApp } from "../app.js";
 import type { WriteRateLimiter } from "../rate-limit/index.js";
+import type { MessageEventPublisher } from "./events.js";
 import {
   createPrismaMessageCreateRepository,
   type MessageCreateRecord,
@@ -37,7 +38,11 @@ const responseMessage = {
   clientRequestId
 };
 
-function createTestApp(messageCreation: MessageCreateService, authenticated = true) {
+function createTestApp(
+  messageCreation: MessageCreateService,
+  authenticated = true,
+  messageEvents?: MessageEventPublisher
+) {
   return createApp({
     auth: {
       handler: (_request, response) => response.sendStatus(500),
@@ -47,7 +52,8 @@ function createTestApp(messageCreation: MessageCreateService, authenticated = tr
     readinessTimeoutMs: 50,
     rooms: { listPublicRooms: async () => [] },
     roomCreation: { createRoom: async () => ({ status: "unavailable" }) },
-    messageCreation
+    messageCreation,
+    ...(messageEvents ? { messageEvents } : {})
   });
 }
 
@@ -146,6 +152,41 @@ describe("message create contracts and HTTP route", () => {
           retryable: true
         }
       });
+  });
+
+  it("publishes only a newly persisted message and keeps HTTP success independent from delivery", async () => {
+    const publishMessageCreated = jest.fn();
+    const messageEvents = { publishMessageCreated };
+    await request(createTestApp({
+      createMessage: async () => ({ status: "created", message: responseMessage })
+    }, true, messageEvents)).post(`/api/rooms/${roomId}/messages`)
+      .send({ body: record.body, clientRequestId })
+      .expect(201, responseMessage);
+    expect(publishMessageCreated).toHaveBeenCalledTimes(1);
+    expect(publishMessageCreated).toHaveBeenCalledWith({
+      message: {
+        id: responseMessage.id,
+        roomId: responseMessage.roomId,
+        body: responseMessage.body,
+        createdAt: responseMessage.createdAt,
+        author: responseMessage.author
+      },
+      clientRequestId
+    });
+
+    await request(createTestApp({
+      createMessage: async () => ({ status: "replayed", message: responseMessage })
+    }, true, messageEvents)).post(`/api/rooms/${roomId}/messages`)
+      .send({ body: record.body, clientRequestId })
+      .expect(200, responseMessage);
+    expect(publishMessageCreated).toHaveBeenCalledTimes(1);
+
+    await request(createTestApp({
+      createMessage: async () => ({ status: "created", message: responseMessage })
+    }, true, { publishMessageCreated: () => { throw new Error("no connected transport"); } }))
+      .post(`/api/rooms/${roomId}/messages`)
+      .send({ body: record.body, clientRequestId })
+      .expect(201, responseMessage);
   });
 });
 

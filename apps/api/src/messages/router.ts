@@ -13,6 +13,7 @@ import {
 import { Router } from "express";
 import type { SessionResolver } from "../auth.js";
 import { decodeMessageCursor } from "./cursor.js";
+import { disabledMessageEventPublisher, type MessageEventPublisher } from "./events.js";
 import {
   disabledMessageCreateService,
   type MessageCreateService,
@@ -27,7 +28,8 @@ const invalidRequest = messageHistoryInvalidResponseSchema.parse({
 export function createMessageHistoryRouter(
   service: MessageHistoryService,
   createService: MessageCreateService = disabledMessageCreateService,
-  resolveIdentity: SessionResolver = async () => null
+  resolveIdentity: SessionResolver = async () => null,
+  messageEvents: MessageEventPublisher = disabledMessageEventPublisher
 ): Router {
   const router = Router();
   router.get("/:roomId/messages", async (request, response) => {
@@ -80,6 +82,22 @@ export function createMessageHistoryRouter(
 
     const result = await createService.createMessage(identity.userId, roomId.data, parsedRequest.data);
     if (result.status === "created" || result.status === "replayed") {
+      if (result.status === "created") {
+        try {
+          messageEvents.publishMessageCreated({
+            message: {
+              id: result.message.id,
+              roomId: result.message.roomId,
+              body: result.message.body,
+              createdAt: result.message.createdAt,
+              author: result.message.author
+            },
+            clientRequestId: result.message.clientRequestId
+          });
+        } catch {
+          // Socket delivery is best-effort after persistence; HTTP durability must remain authoritative.
+        }
+      }
       response.status(result.status === "created" ? 201 : 200).json(result.message);
       return;
     }

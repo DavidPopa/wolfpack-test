@@ -2,6 +2,7 @@ import { healthResponseSchema, notFoundResponseSchema, readinessResponseSchema }
 import express, { type Express } from "express";
 import type { AuthBoundary, SessionResolver } from "./auth.js";
 import { createMessageHistoryRouter } from "./messages/router.js";
+import { disabledMessageEventPublisher, type MessageEventPublisher } from "./messages/events.js";
 import {
   disabledMessageCreateService,
   disabledMessageHistoryService,
@@ -22,6 +23,7 @@ export interface AppOptions {
   roomEvents?: RoomEventPublisher;
   messages?: MessageHistoryService;
   messageCreation?: MessageCreateService;
+  messageEvents?: MessageEventPublisher;
 }
 
 export type ApiApplication = Express & { readonly resolveIdentity: SessionResolver };
@@ -40,7 +42,8 @@ export function createApp(options: AppOptions): ApiApplication {
   app.use("/api/rooms", createMessageHistoryRouter(
     options.messages ?? disabledMessageHistoryService,
     options.messageCreation ?? disabledMessageCreateService,
-    options.auth.resolveIdentity
+    options.auth.resolveIdentity,
+    options.messageEvents ?? disabledMessageEventPublisher
   ));
   app.use("/api/rooms", createRoomsRouter(
     options.rooms,

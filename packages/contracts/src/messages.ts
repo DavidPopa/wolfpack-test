@@ -110,6 +110,15 @@ export const messageCreateErrorResponseSchema = z.union([
   messageCreateUnavailableResponseSchema
 ]);
 
+export const messageRoomSubscriptionSchema = z.object({
+  roomId: messageRoomIdSchema
+}).strict();
+
+export const messageCreatedEventPayloadSchema = z.object({
+  message: publicMessageSchema,
+  clientRequestId: z.string().uuid()
+}).strict();
+
 export type PublicMessage = z.infer<typeof publicMessageSchema>;
 export type MessageHistoryPageInfo = z.infer<typeof messageHistoryPageInfoSchema>;
 export type MessageHistoryResponse = z.infer<typeof messageHistoryResponseSchema>;
@@ -119,3 +128,5 @@ export type MessageHistoryRoomNotFoundResponse = z.infer<typeof messageHistoryRo
 export type MessageCreateRequest = z.infer<typeof messageCreateRequestSchema>;
 export type MessageCreateResponse = z.infer<typeof messageCreateResponseSchema>;
 export type MessageCreateErrorResponse = z.infer<typeof messageCreateErrorResponseSchema>;
+export type MessageRoomSubscription = z.infer<typeof messageRoomSubscriptionSchema>;
+export type MessageCreatedEventPayload = z.infer<typeof messageCreatedEventPayloadSchema>;

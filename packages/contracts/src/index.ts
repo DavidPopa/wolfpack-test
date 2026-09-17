@@ -10,15 +10,18 @@ export {
   messageCreateResponseSchema,
   messageCreateUnauthorizedResponseSchema,
   messageCreateUnavailableResponseSchema,
+  messageCreatedEventPayloadSchema,
   messageHistoryInvalidResponseSchema,
   messageHistoryPageInfoSchema,
   messageHistoryQuerySchema,
   messageHistoryResponseSchema,
   messageHistoryRoomNotFoundResponseSchema,
   messageRoomIdSchema,
+  messageRoomSubscriptionSchema,
   publicMessageSchema
 } from "./messages.js";
 export type {
+  MessageCreatedEventPayload,
   MessageCreateErrorResponse,
   MessageCreateRequest,
   MessageCreateResponse,
@@ -27,6 +30,7 @@ export type {
   MessageHistoryQuery,
   MessageHistoryResponse,
   MessageHistoryRoomNotFoundResponse,
+  MessageRoomSubscription,
   PublicMessage
 } from "./messages.js";
 export {
