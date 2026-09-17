@@ -106,7 +106,10 @@ jest.mock("@/lib/rooms", () => ({
   ...jest.requireActual("@/lib/rooms"),
   fetchPublicRooms: jest.fn()
 }));
-jest.mock("./auth-panel", () => ({ AuthPanel: () => <section aria-label="Account controls">Mock account controls</section> }));
+jest.mock("./auth-panel", () => ({
+  AuthPanel: () => <section aria-label="Account controls">Mock account controls</section>,
+  signInWithGoogle: jest.fn(async () => undefined)
+}));
 const mockMessageHistoryPanel = jest.fn((_props: { roomId: string }) => <p role="status">No messages in this room yet.</p>);
 jest.mock("./message-history-panel", () => ({
   MessageHistoryPanel: (props: { roomId: string }) => mockMessageHistoryPanel(props)
@@ -250,6 +253,21 @@ describe("room map selection and draft state", () => {
     expect(screen.getByRole("heading", { name: "Quiet library" })).toHaveFocus();
     expect(new URL(window.location.href).searchParams.get("room")).toBe(secondRoom.id);
     expect(new URL(window.location.href).searchParams.get("draft")).toBeNull();
+  });
+
+  it("shows the guest composer only for a confirmed room and removes it for a draft", async () => {
+    renderRoomMap();
+    await waitForRooms();
+
+    act(() => markerByTitle("Cluj makers").emit("click", {
+      originalEvent: new MouseEvent("click", { detail: 1 })
+    }));
+    expect(screen.getByRole("region", { name: "Message composer" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Message" })).not.toBeInTheDocument();
+
+    act(() => mapClick(10, 20));
+    expect(screen.queryByRole("region", { name: "Message composer" })).not.toBeInTheDocument();
   });
 
   it("keeps a late initial retry isolated after selecting another room", async () => {

@@ -24,8 +24,9 @@ import {
 } from "@/lib/room-create";
 import { useRoomRealtimeResolution, type RoomRealtimeResolution } from "@/lib/room-realtime";
 import { fetchPublicRooms, mergePublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
-import { AuthPanel } from "./auth-panel";
+import { AuthPanel, signInWithGoogle } from "./auth-panel";
 import { MessageHistoryPanel } from "./message-history-panel";
+import { MessageComposer } from "./message-composer";
 import { Button } from "./ui/button";
 
 type LeafletModule = typeof Leaflet;
@@ -558,6 +559,7 @@ export function RoomMap() {
         {selectedRoom && <div className="room-panel__state">
           <p className="state-label state-label--selected"><span aria-hidden="true">✓</span> Selected persisted room</p>
           <MessageHistoryPanel roomId={selectedRoom.id} />
+          <MessageComposer roomId={selectedRoom.id} auth={auth} onSignIn={signInWithGoogle} />
         </div>}
         {selection.kind === "draft" && <div className="room-panel__state">
           {selectedAttemptMatchesDraft?.status === "pending"

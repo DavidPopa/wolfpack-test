@@ -96,6 +96,29 @@ h1 { margin: .25rem 0 0; font-size: clamp(2rem, 4vw, 3.75rem); line-height: .98;
 .message-item > p { margin: .65rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 .message-author-image { display: grid; width: 2rem; height: 2rem; place-items: center; overflow: hidden; border-radius: 50%; background: var(--color-secondary-soft); color: var(--color-secondary-strong); font-size: .8rem; font-weight: 800; }
 .message-author-image img { width: 100%; height: 100%; object-fit: cover; }
+.message-composer { display: grid; gap: .9rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
+.message-composer p { line-height: 1.5; }
+.message-attempts { display: grid; gap: .75rem; }
+.message-attempt { border: 1px dashed var(--color-secondary-strong); border-radius: .85rem; background: var(--color-secondary-soft); padding: .85rem; }
+.message-attempt--failed { border-color: var(--color-danger); background: var(--color-danger-soft); }
+.message-attempt header { display: flex; justify-content: space-between; gap: .75rem; font-size: .8rem; }
+.message-attempt header span { color: var(--color-muted); font-weight: 700; }
+.message-attempt > p { margin: .65rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-attempt__status { color: var(--color-muted); font-size: .8rem; }
+.message-attempt__error { display: flex; flex-wrap: wrap; gap: .65rem; align-items: center; margin-top: .75rem; }
+.message-attempt__error p { flex: 1 0 100%; margin: 0; color: var(--color-danger); }
+.message-composer__sent { margin: 0; color: var(--color-secondary-strong); font-weight: 700; }
+.message-composer__guest,
+.message-composer__auth-error { border-radius: .75rem; background: var(--color-surface); padding: .85rem 1rem; }
+.message-composer__guest p,
+.message-composer__auth-error p { margin: 0 0 .75rem; color: var(--color-muted); }
+.message-composer__form { display: grid; gap: .55rem; }
+.message-composer__form label { font-weight: 800; }
+.message-composer__form textarea { width: 100%; resize: vertical; border: 1px solid var(--color-border); border-radius: .7rem; background: white; color: var(--color-ink); padding: .75rem; line-height: 1.5; }
+.message-composer__form textarea:focus-visible { outline: .2rem solid var(--color-focus); outline-offset: .15rem; }
+.message-composer__form .button-control { justify-self: start; }
+.message-composer__help { margin: 0; color: var(--color-muted); font-size: .78rem; }
+.message-composer__validation { margin: 0; color: var(--color-danger); font-weight: 700; }
 .auth-card__heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
 .auth-card h2 { margin: .4rem 0 0; font-size: clamp(1.75rem, 3vw, 2.4rem); letter-spacing: -.035em; }
 .auth-state { padding-top: 1.75rem; }
