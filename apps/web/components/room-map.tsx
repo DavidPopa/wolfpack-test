@@ -25,6 +25,7 @@ import {
 import { useRoomRealtimeResolution, type RoomRealtimeResolution } from "@/lib/room-realtime";
 import { fetchPublicRooms, mergePublicRooms, roomsQueryKey, upsertPublicRoom } from "@/lib/rooms";
 import { AuthPanel } from "./auth-panel";
+import { MessageHistoryPanel } from "./message-history-panel";
 import { Button } from "./ui/button";
 
 type LeafletModule = typeof Leaflet;
@@ -556,8 +557,7 @@ export function RoomMap() {
         </h2>
         {selectedRoom && <div className="room-panel__state">
           <p className="state-label state-label--selected"><span aria-hidden="true">✓</span> Selected persisted room</p>
-          <p>Messages for this room will appear here in a future step.</p>
-          <p className="empty-state">No messages are available in this room shell yet.</p>
+          <MessageHistoryPanel roomId={selectedRoom.id} />
         </div>}
         {selection.kind === "draft" && <div className="room-panel__state">
           {selectedAttemptMatchesDraft?.status === "pending"
