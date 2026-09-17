@@ -222,7 +222,7 @@ export function MessageComposer({
       </article>)}
     </div>}
 
-    {sentByRoom[roomId] && <p className="message-composer__sent" role="status" aria-live="polite">{sentByRoom[roomId]}</p>}
+    {sentByRoom[roomId] && <p className="message-composer__sent" role="status" aria-live="polite" aria-atomic="true">{sentByRoom[roomId]}</p>}
 
     {auth.status === "loading" && <p role="status">Checking whether you can send messages…</p>}
     {auth.status === "error" && <div className="message-composer__auth-error" role="alert">

@@ -1,8 +1,9 @@
 import type { MessageHistoryResponse, PublicMessage } from "@map-chat/contracts";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { PropsWithChildren } from "react";
+import { upsertCanonicalMessage } from "@/lib/message-create";
 import { messageHistoryQueryKey } from "@/lib/message-history";
 import { MessageHistoryPanel } from "./message-history-panel";
 
@@ -87,6 +88,7 @@ describe("selected-room message history panel", () => {
     expect(document.querySelector(".message-item img[src='x']")).toBeNull();
     expect(screen.getByText("Avery Stone")).toBeVisible();
     expect(screen.getByRole("time")).toHaveAttribute("datetime", "2026-09-17T10:00:00.000Z");
+    expect(screen.getByRole("time")).toHaveAccessibleName(/^Sent /);
     const authorImage = document.querySelector(".message-author-image img");
     expect(authorImage).not.toBeNull();
     expect(authorImage).toHaveAttribute("referrerpolicy", "no-referrer");
@@ -208,6 +210,128 @@ describe("selected-room message history panel", () => {
     await act(async () => resolveOlder(response(page({ messages: [older], hasOlder: false, hasNewer: true }))));
     await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(2));
     expect(list.scrollTop).toBe(360);
+    expect(screen.queryByRole("button", { name: /New messages/ })).not.toBeInTheDocument();
+  });
+
+  it("auto-scrolls a confirmed message only when the reader is near the bottom", async () => {
+    const first = message({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      body: "Already visible",
+      createdAt: "2026-09-17T10:00:00.000Z"
+    });
+    const incoming = message({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      body: "Near-bottom arrival",
+      createdAt: "2026-09-17T10:01:00.000Z"
+    });
+    jest.mocked(fetch).mockResolvedValue(response(page({ messages: [first] })));
+    const { client } = renderHistory();
+    const list = await screen.findByRole("log", { name: "Room message history" });
+    let height = 600;
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => height });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 200 });
+    list.scrollTop = 330;
+    fireEvent.scroll(list);
+    height = 700;
+
+    await act(async () => client.setQueryData<InfiniteData<MessageHistoryResponse, string | null>>(
+      messageHistoryQueryKey(roomA),
+      (current) => current ? upsertCanonicalMessage(current, incoming) : current
+    ));
+
+    expect(await screen.findByText("Near-bottom arrival")).toBeVisible();
+    expect(list.scrollTop).toBe(700);
+    expect(screen.queryByRole("button", { name: /New messages/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Latest message shown");
+  });
+
+  it("retains a non-bottom position, counts only new IDs, and moves on explicit request without stealing focus", async () => {
+    const first = message({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      body: "Reading here",
+      createdAt: "2026-09-17T10:00:00.000Z"
+    });
+    const incoming = message({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      body: "Waits below",
+      createdAt: "2026-09-17T10:01:00.000Z"
+    });
+    jest.mocked(fetch).mockResolvedValue(response(page({
+      messages: [first],
+      startCursor: "older_cursor",
+      hasOlder: true
+    })));
+    const { client } = renderHistory();
+    const list = await screen.findByRole("log", { name: "Room message history" });
+    let height = 600;
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => height });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 200 });
+    list.scrollTop = 80;
+    fireEvent.scroll(list);
+    const olderControl = screen.getByRole("button", { name: "Load older messages" });
+    olderControl.focus();
+    height = 700;
+
+    await act(async () => client.setQueryData<InfiniteData<MessageHistoryResponse, string | null>>(
+      messageHistoryQueryKey(roomA),
+      (current) => current ? upsertCanonicalMessage(current, incoming) : current
+    ));
+
+    expect(await screen.findByText("Waits below")).toBeVisible();
+    expect(list.scrollTop).toBe(80);
+    expect(olderControl).toHaveFocus();
+    const newMessages = screen.getByRole("button", { name: "New messages (1)" });
+    expect(screen.getByRole("status")).toHaveTextContent("1 new message is available below");
+
+    await act(async () => client.setQueryData<InfiniteData<MessageHistoryResponse, string | null>>(
+      messageHistoryQueryKey(roomA),
+      (current) => current ? upsertCanonicalMessage(current, incoming) : current
+    ));
+    expect(screen.getByRole("button", { name: "New messages (1)" })).toBeVisible();
+
+    await userEvent.setup().click(newMessages);
+    expect(list.scrollTop).toBe(700);
+    expect(list).toHaveFocus();
+    expect(screen.queryByRole("button", { name: /New messages/ })).not.toBeInTheDocument();
+  });
+
+  it("clears the unread control and stale announcement after manually scrolling near the bottom", async () => {
+    const first = message({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      body: "Reading above",
+      createdAt: "2026-09-17T10:00:00.000Z"
+    });
+    const incoming = message({
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      body: "Arrived below",
+      createdAt: "2026-09-17T10:01:00.000Z"
+    });
+    jest.mocked(fetch).mockResolvedValue(response(page({ messages: [first] })));
+    const { client } = renderHistory();
+    const list = await screen.findByRole("log", { name: "Room message history" });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, value: 700 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, value: 200 });
+    list.scrollTop = 80;
+    fireEvent.scroll(list);
+
+    await act(async () => client.setQueryData<InfiniteData<MessageHistoryResponse, string | null>>(
+      messageHistoryQueryKey(roomA),
+      (current) => current ? upsertCanonicalMessage(current, incoming) : current
+    ));
+
+    expect(await screen.findByRole("button", { name: "New messages (1)" })).toBeVisible();
+    const liveRegion = screen.getByRole("status");
+    expect(liveRegion).toHaveTextContent("1 new message is available below");
+
+    list.scrollTop = 440;
+    fireEvent.scroll(list);
+
+    expect(screen.queryByRole("button", { name: /New messages/ })).not.toBeInTheDocument();
+    expect(liveRegion).toHaveTextContent("Latest messages shown.");
+    expect(liveRegion).not.toHaveTextContent("available below");
+
+    fireEvent.scroll(list);
+    expect(liveRegion).toHaveTextContent("Latest messages shown.");
   });
 
   it("never renders a late previous-room response after switching rooms", async () => {

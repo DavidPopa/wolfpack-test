@@ -31,6 +31,7 @@ const messagesByRoom = new Map([[anchorRoomId, [{
 }]]]);
 let messageSequence = 0;
 let nextMessageOrder = "socket-before-http";
+let nextMessageFailure = null;
 const state = {
   broadcasts: 0,
   connections: 0,
@@ -177,6 +178,17 @@ const server = createServer(async (request, response) => {
     }
     const body = await readJson(request);
     state.messagePosts += 1;
+    if (nextMessageFailure === "rate-limited") {
+      nextMessageFailure = null;
+      sendJson(response, 429, {
+        error: {
+          code: "MESSAGE_RATE_LIMITED",
+          message: "Message rate limit exceeded",
+          retryAfterSeconds: 1
+        }
+      });
+      return;
+    }
     const replay = messageRequests.get(body.clientRequestId);
     if (replay) {
       sendJson(response, 200, { ...replay, clientRequestId: body.clientRequestId });
@@ -214,6 +226,16 @@ const server = createServer(async (request, response) => {
     }
     nextMessageOrder = body.order;
     sendJson(response, 200, { order: nextMessageOrder });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/__fixture/message-failure") {
+    const body = await readJson(request);
+    if (body.failure !== "rate-limited") {
+      sendJson(response, 400, { error: "invalid fixture failure" });
+      return;
+    }
+    nextMessageFailure = body.failure;
+    sendJson(response, 200, { failure: nextMessageFailure });
     return;
   }
   if (request.method === "GET" && url.pathname === "/__fixture/state") {

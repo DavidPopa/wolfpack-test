@@ -240,8 +240,8 @@ export function RoomRealtimeProvider({ children }: { children: ReactNode }) {
     [followMessageRoom, subscribe]
   );
   return <RoomRealtimeContext.Provider value={value}>
-    <div className="room-connection-status" role="status" aria-live="polite">
-      {connectionCopy[connectionState]}
+    <div className="room-connection-status">
+      <span role="status" aria-live="polite" aria-atomic="true">{connectionCopy[connectionState]}</span>
       {connectionState === "recovery-error" && <button type="button" onClick={() => retryRecoveryRef.current()}>
         Retry live recovery
       </button>}
