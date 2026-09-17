@@ -12,6 +12,8 @@ This directory contains the project's GPT-only instructions and skills. It does 
 
 | Skill | Purpose |
 | --- | --- |
+| [onboard-project](skills/onboard-project/SKILL.md) | Read-only repository orientation, setup audit and owner-document map |
+| [onboard-developer](skills/onboard-developer/SKILL.md) | Interactive role-aware journey through product, stack, testing and contribution workflow |
 | [create-sprint](skills/create-sprint/SKILL.md) | Orchestrator creates a phase, board, ownership map and approval lock |
 | [create-task](skills/create-task/SKILL.md) | Orchestrator creates one bounded, fresh-agent-ready task |
 | [sprint](skills/sprint/SKILL.md) | Load and validate one approved manual sprint task |

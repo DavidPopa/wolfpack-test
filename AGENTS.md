@@ -17,6 +17,8 @@ Canonical skills live in `.codex/skills/`; `.agents/skills/` contains discovery 
 
 | Work | Skill |
 | --- | --- |
+| Explore or audit this repository, its commands and owner docs | `onboard-project` |
+| Guide a developer through a role-aware project journey | `onboard-developer` |
 | Create or refine a sprint phase | `create-sprint` |
 | Create one bounded task and its evidence requirements | `create-task` |
 | Load and validate an approved sprint/task packet | `sprint` |
