@@ -9,6 +9,18 @@ export interface MessageReadRecord {
   author: { name: string; image: string | null };
 }
 
+export interface MessageCreateRecord extends MessageReadRecord {
+  authorId: string;
+  clientRequestId: string;
+}
+
+export interface CreateMessageData {
+  roomId: string;
+  authorId: string;
+  body: string;
+  clientRequestId: string;
+}
+
 export type MessagePageDirection = "newest" | "before" | "after";
 
 export interface MessagePageRequest {
@@ -30,6 +42,12 @@ const publicMessageSelect = {
   body: true,
   createdAt: true,
   author: { select: { name: true, image: true } }
+} as const;
+
+const messageCreateSelect = {
+  ...publicMessageSelect,
+  authorId: true,
+  clientRequestId: true
 } as const;
 
 type CursorComparison =
@@ -62,6 +80,32 @@ export interface MessageReadRepository {
   roomExists: (roomId: string) => Promise<boolean>;
   cursorExists: (roomId: string, cursor: MessageCursor) => Promise<boolean>;
   listPage: (request: MessagePageRequest) => Promise<MessagePageRecords>;
+}
+
+export interface MessageCreatePrismaClient {
+  room: {
+    findUnique: (query: { where: { id: string }; select: { id: true } }) => Promise<{ id: string } | null>;
+  };
+  message: {
+    findUnique: (query: {
+      where: { authorId_clientRequestId: { authorId: string; clientRequestId: string } };
+      select: typeof messageCreateSelect;
+    }) => Promise<MessageCreateRecord | null>;
+    create: (query: {
+      data: CreateMessageData;
+      select: typeof messageCreateSelect;
+    }) => Promise<MessageCreateRecord>;
+  };
+}
+
+export interface MessageCreateRepository {
+  roomExists: (roomId: string) => Promise<boolean>;
+  findByAuthorRequest: (authorId: string, clientRequestId: string) => Promise<MessageCreateRecord | null>;
+  createOrFindAfterConflict: (data: CreateMessageData) => Promise<{ created: boolean; message: MessageCreateRecord }>;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
 function cursorWhere(direction: "before" | "after", cursor: MessageCursor): CursorComparison[] {
@@ -110,6 +154,33 @@ export function createPrismaMessageReadRepository(
         hasOlder: request.direction === "after" || hasExtra,
         hasNewer: request.direction === "before" || (request.direction === "after" && hasExtra)
       };
+    }
+  };
+}
+
+export function createPrismaMessageCreateRepository(prisma: MessageCreatePrismaClient): MessageCreateRepository {
+  const findByAuthorRequest = (authorId: string, clientRequestId: string) => prisma.message.findUnique({
+    where: { authorId_clientRequestId: { authorId, clientRequestId } },
+    select: messageCreateSelect
+  });
+
+  return {
+    async roomExists(roomId) {
+      return (await prisma.room.findUnique({ where: { id: roomId }, select: { id: true } })) !== null;
+    },
+    findByAuthorRequest,
+    async createOrFindAfterConflict(data) {
+      try {
+        return {
+          created: true,
+          message: await prisma.message.create({ data, select: messageCreateSelect })
+        };
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        const existing = await findByAuthorRequest(data.authorId, data.clientRequestId);
+        if (!existing) throw error;
+        return { created: false, message: existing };
+      }
     }
   };
 }

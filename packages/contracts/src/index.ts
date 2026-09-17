@@ -2,6 +2,14 @@ export { dependencyStatusSchema, healthResponseSchema, notFoundResponseSchema, r
 export type { HealthResponse, ReadinessResponse } from "./health.js";
 export {
   messageCursorSchema,
+  messageCreateConflictResponseSchema,
+  messageCreateErrorResponseSchema,
+  messageCreateInvalidResponseSchema,
+  messageCreateRateLimitedResponseSchema,
+  messageCreateRequestSchema,
+  messageCreateResponseSchema,
+  messageCreateUnauthorizedResponseSchema,
+  messageCreateUnavailableResponseSchema,
   messageHistoryInvalidResponseSchema,
   messageHistoryPageInfoSchema,
   messageHistoryQuerySchema,
@@ -11,6 +19,9 @@ export {
   publicMessageSchema
 } from "./messages.js";
 export type {
+  MessageCreateErrorResponse,
+  MessageCreateRequest,
+  MessageCreateResponse,
   MessageHistoryInvalidResponse,
   MessageHistoryPageInfo,
   MessageHistoryQuery,
