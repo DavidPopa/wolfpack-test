@@ -30,8 +30,30 @@ async function interceptMapBoundaries(page: Page, roomPayload = rooms) {
   const tileRequests = await interceptStadiaTiles(page);
   const roomMethods: string[] = [];
   const roomCreateRequests: Array<{ latitude: number; longitude: number; clientRequestId: string }> = [];
+  const messageHistoryRequests: string[] = [];
   let sessionBody = "null";
   await page.route("**/api/auth/get-session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: sessionBody }));
+  await page.route("**/api/rooms/*/messages*", (route) => {
+    const request = route.request();
+    if (request.method() !== "GET") {
+      return route.fulfill({ status: 405, contentType: "application/json", body: JSON.stringify({ error: "unexpected method" }) });
+    }
+    const url = new URL(request.url());
+    messageHistoryRequests.push(`${url.pathname}${url.search}`);
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        messages: [],
+        pageInfo: {
+          startCursor: null,
+          endCursor: null,
+          hasOlder: false,
+          hasNewer: false
+        }
+      })
+    });
+  });
   await page.route("**/api/rooms", (route) => {
     const request = route.request();
     roomMethods.push(request.method());
@@ -57,6 +79,7 @@ async function interceptMapBoundaries(page: Page, roomPayload = rooms) {
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(roomPayload) });
   });
   return {
+    messageHistoryRequests,
     roomCreateRequests,
     roomMethods,
     tileRequests,
@@ -136,7 +159,7 @@ test("real production Leaflet renders persisted pins and exact attribution at de
 });
 
 test("persisted marker selection, controls, drag, and browser history stay mutually exclusive with drafts", async ({ page }) => {
-  const { roomMethods } = await interceptMapBoundaries(page);
+  const { messageHistoryRequests, roomMethods } = await interceptMapBoundaries(page);
   await page.goto("/");
 
   const map = page.getByRole("region", { name: "Public room map" });
@@ -151,7 +174,10 @@ test("persisted marker selection, controls, drag, and browser history stay mutua
   await firstMarker.click();
   await expect(page.getByRole("heading", { name: "Cluj makers" })).toBeVisible();
   await expect(page.getByText("Selected persisted room")).toBeVisible();
-  await expect(page.getByText("No messages are available in this room shell yet.")).toBeVisible();
+  await expect(page.locator('p[role="status"]').filter({ hasText: /^No messages in this room yet\.$/ })).toBeVisible();
+  await expect.poll(() => messageHistoryRequests).toEqual([
+    `/api/rooms/${rooms[0].id}/messages`
+  ]);
   await expect(page.locator(".room-pin-wrapper--selected .room-pin__selected")).toHaveText("✓");
   await expect(page).toHaveURL(new RegExp(`room=${rooms[0].id}`));
   await expect(page.locator(".leaflet-marker-icon.draft-pin-wrapper")).toHaveCount(0);
@@ -279,7 +305,8 @@ test("keyboard marker selection and draft panels reflow accessibly at mobile siz
   expect(railBox).not.toBeNull();
   expect(mapBox!.y + mapBox!.height).toBeLessThanOrEqual(railBox!.y + 4);
 
-  const signIn = page.getByRole("button", { name: "Continue with Google" });
+  const signIn = page.getByRole("region", { name: "Join the conversation" })
+    .getByRole("button", { name: "Continue with Google" });
   await signIn.scrollIntoViewIfNeeded();
   await expect(signIn).toBeVisible();
   await expect(signIn).toBeInViewport();

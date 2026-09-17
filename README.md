@@ -1,46 +1,44 @@
 # Map Chat
 
-Map Chat is a full-stack application created for the Wolfpack Digital developer assessment. The current Phase 003 implementation delivers the room-and-map slice: visitors can load persisted public room pins, select a room or draft a location, and preserve validated selection state through an authentication return. Google-authenticated users can explicitly create rooms with server-derived identity, PostgreSQL idempotency, Redis rate limiting, optimistic feedback, and targeted retry behavior.
+Map Chat is a full-stack map-based public chat application built for the Wolfpack Digital developer assessment. Visitors can browse persisted room pins and read paginated conversations. Google-authenticated users can create rooms and send plain-text messages. PostgreSQL is authoritative for rooms, messages and sessions; Redis provides atomic write-rate limits; Socket.IO delivers newly persisted rooms and room-scoped messages through the same browser origin.
 
-Newly persisted rooms are delivered through Socket.IO on the existing same-origin proxy. The browser reconciles HTTP and socket results by stable room/request identity, avoids duplicate pins in either arrival order, retains unrelated optimistic attempts, and refreshes missed rooms after reconnect without replacing a newer selection. The responsive Leaflet map uses the approved Stadia Maps-hosted Stamen Watercolor source and visible attribution documented in [docs/MAP.md](docs/MAP.md).
+The client handles optimistic room and message creation without putting temporary objects into canonical server caches. Stable client request IDs make retries idempotent, HTTP/socket arrival in either order deduplicates by canonical identity, and reconnect catch-up walks every newer message page for the currently selected room. The responsive interface preserves room selection, drafts, reading position and keyboard focus across late requests and realtime recovery.
 
-## Implemented through Phase 003
+The map uses Leaflet with the approved Stadia Maps-hosted Stamen Watercolor tiles and visible Stadia Maps, Stamen Design, OpenStreetMap and Leaflet attribution. [docs/MAP.md](docs/MAP.md) is the source of truth for provider configuration and licensing.
 
-- Public `GET /api/rooms` responses expose only browser-safe pin fields in stable creation order.
-- Persisted pins, keyboard/mouse room selection, bounded empty-map drafts, URL restoration, responsive panels, and explicit post-auth resume behavior.
-- Protected `POST /api/rooms` creation with server-session identity, strict coordinates and UUID request IDs, automatic titles, PostgreSQL uniqueness, and canonical idempotent replay.
-- Atomic Redis write-rate limiting with bounded, hashed keys; protected writes fail closed when the limiter is unavailable while public reads remain available.
-- Separate optimistic attempts with stable retry IDs, classified failures, targeted rollback, and late-result selection protection.
-- Strict `room.created` delivery only for newly persisted rooms, plus client deduplication, listener cleanup, connection status, and reconnect recovery.
-- Google-only Better Auth session lifecycle; no local password provider.
+## Product boundary
 
-## Current product boundary
+Implemented:
 
-Message/chat functionality is not implemented yet. The Room and Message tables exist, but public message history, pagination, message sending/composer UI, message write rate limiting, room subscriptions, and message realtime delivery remain Phase 004 work. The selected-room panel intentionally renders a room shell without conversations. Do not treat room realtime as chat realtime.
+- public room pins and public chronological message history;
+- stable `(createdAt, id)` message pagination for newest, older and forward catch-up pages;
+- Google-only Better Auth sessions, with no local password provider;
+- session-derived, PostgreSQL-idempotent room and message creation;
+- atomic Redis rate limiting for both write types, with fail-closed writes and public reads remaining available;
+- optimistic room/message attempts, targeted failure and stable-ID retry;
+- one same-origin Socket.IO lifecycle for global `room.created` and selected-room `message.created` delivery;
+- deduplication for HTTP-before-socket, socket-before-HTTP and duplicate delivery;
+- multi-page reconnect reconciliation without changing a newer selection;
+- responsive desktop/mobile chat, reader-controlled scrolling, keyboard controls, visible focus, semantic timestamps and accessible status/error announcements.
 
-## Technology
+Intentionally excluded: private rooms, moderation, room renaming/deletion, pin movement, search, geolocation, profiles/roles, other login providers, message editing/deletion, attachments, reactions, threads, presence, typing indicators, read receipts, offline sending, push notifications, queues, message caches and horizontal scaling.
 
-- **Frontend:** Next.js, TypeScript, Tailwind CSS, shadcn/ui, TanStack Query
-- **Backend:** Node.js, Express, Socket.IO, Better Auth
-- **Data:** PostgreSQL, Prisma 7, Redis
-- **Map:** Leaflet
-- **Testing:** Jest, React Testing Library, Playwright with Chromium
-- **Tooling:** pnpm workspaces, Docker Compose, ESLint, Husky, GitHub Actions
+## Architecture
 
-## Project structure
+- `apps/web`: Next.js App Router, React, Tailwind CSS, shadcn/ui primitives, TanStack Query, Leaflet and the single browser Socket.IO client.
+- `apps/api`: Express modular monolith, Better Auth, Prisma/PostgreSQL, Redis rate limiting and the Socket.IO server.
+- `packages/contracts`: strict browser-safe HTTP and realtime schemas/types.
+- `tests/e2e`: production-proxy scenarios plus a labelled deterministic realtime fixture.
+- `docs`: product, engineering, map/provider, testing and delivery documentation.
 
-```text
-apps/
-  web/          Next.js application
-  api/          Express API
-packages/
-  contracts/    Shared API and realtime contracts
-docs/           Product and engineering documentation
-```
+The production topology is browser → nginx → Next.js for UI and Express for `/api/*` and `/socket.io/*`. Express owns authentication, persistence, rate limiting and realtime publication. Writes persist before success or broadcast; the browser treats HTTP history as authoritative.
 
-## Pinned runtime and install
+## Prerequisites and install
 
-Use Node `24.21.0` and pnpm `11.24.0` without changing a machine-wide default. `.node-version` and `.nvmrc` contain the Node pin. If a runtime manager is unavailable, download the official matching Node archive into an ignored task-local directory and prepend its `bin` directory to `PATH`.
+- Node `24.21.0` (`.node-version` and `.nvmrc`)
+- pnpm `11.24.0`
+- Docker with Compose
+- Chromium installed through Playwright for browser tests
 
 ```sh
 node --version
@@ -48,22 +46,46 @@ pnpm --version
 pnpm install --frozen-lockfile
 ```
 
-External direct dependencies are exact pins—no caret, tilde, or floating `latest` specifiers. Prisma CLI, client, and PostgreSQL adapter are aligned at `7.10.0`; Better Auth and its Prisma adapter are aligned at `1.7.5`. pnpm permits lifecycle builds only for reviewed pinned tooling that needs setup or native binaries: Prisma client/engines/CLI, SWC, esbuild/tsx, Tailwind's Parcel watcher, and the ESLint resolver. Installation has no `prepare` script and does not change Git configuration.
+Direct dependencies are pinned exactly. Prisma packages are aligned at `7.10.0`; Better Auth packages are aligned at `1.7.5`. The generated Prisma client is ignored and regenerated by the root development, typecheck, API-test and build commands.
 
-## Local development and production stack
+## Configuration
 
-Local development deliberately reuses the isolated test PostgreSQL/Redis pair; it never falls back to a developer database. Start those services, then start the API on `4000` and Next on `3000`:
+[`.env.example`](.env.example) documents dummy values and every supported local/Compose override. Do not commit a populated `.env`. The root development command has safe local defaults and inherits exported overrides; Docker Compose also reads an uncommitted root `.env` for `${...}` substitutions.
+
+For a real Google OAuth smoke, replace only the auth secret and Google credentials in a safe local environment. `BETTER_AUTH_URL` must be the exact browser-visible canonical origin, and the comma-separated `BETTER_AUTH_TRUSTED_ORIGINS` must contain it. Register this redirect URI:
+
+```text
+<browser-visible-origin>/api/auth/callback/google
+```
+
+Examples are `http://127.0.0.1:3000/api/auth/callback/google` for default development, `http://127.0.0.1:8081/api/auth/callback/google` for local Compose, and `https://your-domain.example/api/auth/callback/google` for an HTTPS deployment.
+
+Dummy credentials make configuration and deterministic tests runnable but cannot complete Google consent, callback, session or logout. Fixture/test sessions are not real Google OAuth evidence. No Stadia browser key is required or permitted; local/provider domain authentication is an operational concern described in [docs/MAP.md](docs/MAP.md).
+
+## Local development
+
+Local development deliberately uses the isolated migrated test PostgreSQL/Redis pair on `127.0.0.1:55431` and `127.0.0.1:56381`:
 
 ```sh
 pnpm services:test:up
 pnpm dev
 ```
 
-Open `http://127.0.0.1:3000`. `pnpm dev` regenerates the ignored Prisma client before compiling or starting either application, supplies the dummy connection values recorded in `.env.example`, and fails clearly when the isolated services are unavailable. In development only, Next rewrites same-origin `/api/*` requests to Express on `127.0.0.1:4000`; production continues to use nginx. Development mode is not production E2E proof. Stop its dependencies with `pnpm services:test:stop` after stopping the dev process.
+Open `http://127.0.0.1:3000`. In development only, Next rewrites `/api/*` to Express at `http://127.0.0.1:4000`. To use different ports without touching another process:
 
-If either application port is already owned, choose isolated alternatives without stopping that process, for example `PORT=4100 WEB_PORT=3100 pnpm dev`, then open the selected web port. The development rewrite follows the selected API `PORT`.
+```sh
+PORT=4100 WEB_PORT=3100 pnpm dev
+```
 
-The production stack is isolated as Compose project `wolfpack` and publishes only nginx at `127.0.0.1:8081`:
+The rewrite follows the selected API port and the default auth origin follows the selected web port. If you supply auth origins explicitly, update them together. Stop the foreground development process first, then preserve service data/resources with:
+
+```sh
+pnpm services:test:stop
+```
+
+## Production-like Compose stack
+
+The repository Compose project is named `wolfpack`. Only nginx is published, at `127.0.0.1:8081`; PostgreSQL, Redis, API and web remain internal.
 
 ```sh
 pnpm stack:up
@@ -72,41 +94,25 @@ curl http://127.0.0.1:8081/api/ready
 pnpm stack:stop
 ```
 
-`stack:stop` stops only this project's services and preserves the named PostgreSQL volume. Restart with `pnpm stack:up`. Do not use `down --volumes`, pruning, or a developer database. Images are pinned by tag and multi-platform digest: Node `24.21.0-bookworm-slim`, PostgreSQL `17.8-bookworm`, Redis `7.4.11-bookworm`, and stable nginx `1.30.4-alpine`. App image stages run as the non-root `node` user.
+`/api/health` proves the API process responds. `/api/ready` also probes PostgreSQL and Redis within the configured timeout. `stack:stop` preserves the named `wolfpack_postgres-data` volume. Never use `down --volumes`, database reset, Redis `FLUSH*` or broad pruning for repository verification.
 
-Before starting either repository Compose project, inspect existing containers and ports. Do not rebuild, stop, or reuse a runtime owned by another worktree. The production proxy is the only published production port and routes `/api/*` and `/socket.io/*` to Express and all other traffic to Next.js.
+Before starting either Compose project, inspect existing containers and listeners. Do not rebuild, stop or reuse a runtime owned by another checkout.
 
-## Map provider and attribution
+## Two-browser demo
 
-The browser pins Leaflet `1.9.4` and the approved Stadia Maps-hosted Stamen Watercolor raster source with maximum zoom `16`. The map must visibly retain linked attribution for **Stadia Maps**, **Stamen Design**, **OpenStreetMap**, and Leaflet. [docs/MAP.md](docs/MAP.md) is the durable source of truth for the exact tile template, attribution, licensing and configuration decision.
+With the production stack running and real Google OAuth configured:
 
-The approved use is an evaluation/non-commercial proof of concept. A public preview requires Stadia domain authentication; commercial use requires a fresh licensing review and an active paid plan. No browser API key belongs in `NEXT_PUBLIC_*`, Git, logs, screenshots, or client bundles. Automated Chromium tests intercept Stadia tile requests with deterministic neutral tiles, so they prove Leaflet integration and visible attribution—not live provider availability or domain authentication. A live-provider smoke is separate and must be explicitly configured.
+1. Open `http://127.0.0.1:8081` in two independent browser profiles.
+2. Select the same persisted room in both profiles; public history is readable while signed out.
+3. Sign in with Google in one profile and send a message.
+4. Confirm the pending attempt becomes one canonical message in the sender and appears once in the other profile.
+5. Put the second profile offline, send a few messages, reconnect it, and confirm catch-up without room-selection or scroll-position theft. The deterministic Chromium suite separately exercises recovery across more than one history page.
 
-## Google authentication configuration
-
-The API requires `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`. `BETTER_AUTH_URL` must be the browser-visible origin with no path or trailing slash. `BETTER_AUTH_TRUSTED_ORIGINS` is a comma-separated list of exact origins and must include `BETTER_AUTH_URL`. The committed `.env.example`, development command, and Compose defaults contain dummy values only; they make configuration and non-provider checks runnable but cannot complete Google OAuth.
-
-Better Auth is exposed through the same origin as the web application. Register the exact Google redirect URI by appending `/api/auth/callback/google` to the browser-visible origin:
-
-- Local `pnpm dev`: `http://127.0.0.1:3000/api/auth/callback/google` (or the selected `WEB_PORT`). Next proxies `/api/*` to Express.
-- Local production Compose: `http://127.0.0.1:8081/api/auth/callback/google`. nginx proxies `/api/*` to Express.
-- Deployment: `https://your-domain.example/api/auth/callback/google`. Deployment must use HTTPS and set both `BETTER_AUTH_URL` and trusted origins to the deployed origin.
-
-Google personal and Workspace accounts are accepted; no hosted-domain restriction is configured. Email/password sign-up and sign-in are disabled. Replace the dummy Google values and auth secret through local, uncommitted environment configuration before a real-provider smoke. Automated configuration, fixture-session and persisted-session tests do not prove the Google redirect, callback, login or logout flow. Real Google OAuth remains **NOT_RUN** unless a separately recorded smoke uses developer-supplied credentials.
-
-The Next.js app has one Better Auth React client in `apps/web/lib/auth-client.ts`. It deliberately omits an absolute `baseURL` and uses `/api/auth`, so browser session and sign-in/sign-out calls stay on the application origin through the existing development rewrite or production nginx proxy. `useAuthSession` is a thin projection of Better Auth's reactive session hook into explicit loading, signed-out, signed-in and retryable error states; it does not copy auth state into TanStack Query. Google sign-in passes the current room/draft URL through `getSafeReturnTarget`, which keeps only same-origin path, query and hash state. Returning from auth restores a valid selection or draft but never creates a room without an explicit signed-in action.
-
-The web shell renders the reactive loading, guest, session-error and authenticated states from that single session boundary. It offers Google sign-in only, displays the signed-in user's name without exposing their email, and relies on Better Auth's reactive session update after logout. Focused web tests mock the Better Auth client boundary and cover the visible states, keyboard actions, failure recovery and safe return target. Production Chromium covers the guest shell and same-origin proxy session request without navigating to Google. These automated checks do not prove real Google OAuth; that remains a separate sanitized manual smoke when credentials are supplied.
-
-## Server-side session boundary and auth tests
-
-Protected API work must use the typed server-side resolver in `apps/api/src/auth.ts`. It passes only the incoming request headers to Better Auth, forces an authoritative database lookup instead of trusting cookie cache, avoids a hidden session refresh whose cookie could not be forwarded from a protected endpoint, and returns only the verified user ID. Request bodies, identity-like headers, bearer values and environment variables cannot activate a fixture identity. The production runtime always constructs this resolver and the Express handler from the same real Better Auth instance.
-
-Unit tests can replace the auth boundary only when calling the application factory directly. The real PostgreSQL integration creates a uniquely prefixed user and session with Better Auth's test-only construction plugin, which registers no HTTP endpoints, and then verifies that the normal production boundary resolves the cookie. It also proves that an untrusted origin cannot log out the session, a configured same-origin request deletes the persisted session and clears the cookie, and cleanup removes only the generated user/account/session rows. These seeded fixtures prove the database/session lifecycle only; they do not contact Google or prove real Google OAuth.
+Without real credentials, use the automated realtime Chromium project only as deterministic fixture evidence. It uses `.invalid` identity and in-memory HTTP/session/message state, so it does not prove Better Auth persistence, PostgreSQL, Redis or Google OAuth.
 
 ## Ordered verification
 
-Start the isolated test PostgreSQL/Redis pair first. It uses `127.0.0.1:55431`, database `mapchat_foundation_test`, `127.0.0.1:56381`, and repository-owned Redis prefixes rooted at `foundation:task001:`. Integration suites use scoped SQL/auth/room fixtures and exact Redis keys; cleanup must never reset the database or flush Redis.
+Run the complete local sequence from the repository root. The production stack must be free and explicitly assigned to the run before `stack:up`.
 
 ```sh
 pnpm services:test:up
@@ -127,37 +133,37 @@ pnpm stack:stop
 pnpm services:test:stop
 ```
 
-`services:test:up` deploys the committed migration to the isolated test database. Use `pnpm db:migrate:test:status` to inspect it. Creating a new migration is an explicit developer action with `pnpm db:migrate:test:create --name <name>`; production commands require an explicitly supplied `DATABASE_URL`, for example `DATABASE_URL=postgresql://... pnpm db:migrate:deploy` or `DATABASE_URL=postgresql://... pnpm db:migrate:status`. Never run a reset against a persistent database.
+`pnpm test:e2e` assigns every `tests/e2e/*.spec.ts` file exactly once. Foundation/map specs use the production proxy at `8081`. The realtime spec uses an isolated, runner-owned proxy at `18081` by default, real browser Socket.IO transport, a production web image, deterministic in-memory fixture APIs and intercepted Stadia tiles. Child failures propagate; interruption and normal completion clean only exact resources owned by the runner.
 
-`pnpm test:e2e` validates that every `tests/e2e/*.spec.ts` file belongs to exactly one named Chromium project. The production project runs the foundation and map scenarios against the already-started production proxy on `127.0.0.1:8081`. The realtime project runs `tests/e2e/room-realtime.spec.ts` against a task-owned origin: the runner starts the in-memory API/session fixture, a second container from the exact image ID currently tagged `wolfpack-web:latest`, and the dedicated nginx proxy on one owned Docker bridge network. Stable network aliases carry all fixture/web/proxy traffic; no host gateway is used, and only the proxy publishes `127.0.0.1:18081`. Defaults are internal fixture/web ports `4108`/`3108`, containers `wolfpack-e2e-realtime-fixture`/`-web`/`-proxy`, and network `wolfpack-e2e-realtime`; corresponding `ROOM_REALTIME_*` variables allow isolated worktree values. Occupied proxy ports, container names or network names fail before mutation and are never reused.
+See [docs/TESTING.md](docs/TESTING.md) for suite coverage, evidence boundaries and runtime safety. Local results do not prove GitHub Actions for another SHA. Real Google OAuth and live Stadia remain `NOT_RUN` until separate sanitized smokes are recorded.
 
-Foundation/map scenarios exercise the production web/proxy boundary; map scenarios intercept room/session responses where declared and every current browser scenario intercepts Stadia tiles. The targeted two-context realtime scenario uses the fixture in `tests/e2e/room-realtime-fixture.mjs` and proxy template in `tests/e2e/room-realtime.nginx.conf`. It proves production-browser Socket.IO transport and client reconciliation, not PostgreSQL, Redis, Better Auth, or Google. The root runner propagates either project failure, terminates an in-flight owned child process group on interruption, and then cleans its exact-ID containers/network in `finally`; it never stops the separately owned `wolfpack` stack or removes a volume. See [docs/TESTING.md](docs/TESTING.md) for evidence boundaries.
+## Database operations
 
-The generated Prisma client is intentionally not committed. Root `dev`, `typecheck`, API unit/integration test, and `build` commands each regenerate it before consuming API runtime code, so they remain reproducible after a clean install. The explicit `pnpm db:generate` step above keeps generation visible as setup evidence; CI and Docker also retain their own generation steps.
+`pnpm services:test:up` deploys committed migrations to the isolated test database. Safe inspection commands are:
 
-For the production-volume check, use a unique `foundation_task001_*` temporary table directly through `docker compose exec -T postgres psql`, insert one dummy row, stop/start with the scripts above, verify the row, then drop only that fixture table. Never remove the volume.
+```sh
+pnpm db:migrate:test:status
+DATABASE_URL=postgresql://... pnpm db:migrate:status
+DATABASE_URL=postgresql://... pnpm db:migrate:deploy
+```
 
-## Hooks
+Creating a migration is an explicit developer action with `pnpm db:migrate:test:create --name <name>`. Never reset a persistent database.
 
-`.husky/pre-commit` invokes `pnpm hooks:check`, which stops on the first failure in this order: lint, types, API unit, API integration, web Jest. The root typecheck and API test commands regenerate the Prisma client, so the hook does not depend on ignored output from an earlier command. The integration gate fails clearly when the isolated services are unavailable. These working-tree checks do not prove a different partially staged snapshot.
+## Hooks and CI
 
-Husky is configured but deliberately not activated by installation. Only the developer should run:
+`.husky/pre-commit` invokes `pnpm hooks:check`: lint, TypeScript, API unit, API integration and web Jest, stopping on the first failure. Husky is configured but installation is deliberately developer-owned:
 
 ```sh
 pnpm hooks:install
 ```
 
-The project-local Codex `PreToolUse` guard and harmless fixtures live under `.codex/`. Project hooks run only after the current definition is reviewed and trusted in Codex; see `.codex/README.md`. Fixtures do not prove trust or live tool routing, and the guard is defense in depth rather than a complete security boundary.
+The GitHub Actions workflow performs a frozen install, starts isolated services, runs the ordered gates, builds the production stack, executes the unfiltered Chromium gate and always stops owned services without deleting volumes. A committed workflow or local pass is not evidence that CI passed a particular SHA; record the actual run URL and SHA separately.
 
 ## Documentation
 
 - [Technical PRD](docs/PRD.md)
 - [Engineering notes](docs/ENGINEERING.md)
-- [Testing strategy](docs/TESTING.md)
+- [Testing contract](docs/TESTING.md)
+- [Map provider decision](docs/MAP.md)
+- [Delivery report](docs/DELIVERY.md)
 - [Agent workflow](AGENTS.md)
-
-## CI and current limits
-
-The committed PR workflow is configured for a frozen install, isolated migrated services, Prisma generation, the ordered gates, production Compose, Chromium, tooling fixtures, and sanitized failure artifacts. It does not use `pull_request_target`, publish images, or change branch protection. A workflow definition, historical task run, or local pass is not evidence that CI passed a particular commit; record the actual run URL and SHA separately.
-
-Automated tests cover the room list/create contracts, real PostgreSQL room persistence/idempotency, real Redis limiter state/expiry, mocked client state and failure paths, production Leaflet interaction, and real Socket.IO transports within the boundaries described in [docs/TESTING.md](docs/TESTING.md). They do not prove real Google OAuth, live Stadia access, deployment, message/chat behavior, or a successful current PR run.
