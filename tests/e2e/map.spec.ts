@@ -29,16 +29,35 @@ const signedInSession = {
 async function interceptMapBoundaries(page: Page, roomPayload = rooms) {
   const tileRequests = await interceptStadiaTiles(page);
   const roomMethods: string[] = [];
+  const roomCreateRequests: Array<{ latitude: number; longitude: number; clientRequestId: string }> = [];
   let sessionBody = "null";
   await page.route("**/api/auth/get-session", (route) => route.fulfill({ status: 200, contentType: "application/json", body: sessionBody }));
   await page.route("**/api/rooms", (route) => {
-    roomMethods.push(route.request().method());
-    if (route.request().method() !== "GET") {
-      return route.fulfill({ status: 405, contentType: "application/json", body: JSON.stringify({ error: "unexpected write" }) });
+    const request = route.request();
+    roomMethods.push(request.method());
+    if (request.method() === "POST") {
+      const body = request.postDataJSON() as { latitude: number; longitude: number; clientRequestId: string };
+      roomCreateRequests.push(body);
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Room at 46.7701, 23.5901",
+          latitude: body.latitude,
+          longitude: body.longitude,
+          createdAt: "2026-09-17T10:00:00.000Z",
+          clientRequestId: body.clientRequestId
+        })
+      });
+    }
+    if (request.method() !== "GET") {
+      return route.fulfill({ status: 405, contentType: "application/json", body: JSON.stringify({ error: "unexpected method" }) });
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(roomPayload) });
   });
   return {
+    roomCreateRequests,
     roomMethods,
     tileRequests,
     signIn: () => {
@@ -99,7 +118,8 @@ test("real production Leaflet renders persisted pins and exact attribution at de
   await expect(map).toHaveAttribute("data-map-zoom", "5");
   await expect(map).toHaveAttribute("data-map-max-zoom", "16");
   await expect(page.locator(".leaflet-marker-icon.room-pin-wrapper")).toHaveCount(2);
-  await expect(page.getByRole("status")).toContainText("2 public rooms are visible");
+  await expect(page.getByRole("group", { name: "Room loading status" }).getByRole("status"))
+    .toContainText("2 public rooms are visible");
   await expect(page.getByRole("link", { name: "Stadia Maps" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Stamen Design" })).toBeVisible();
   await expect(page.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
@@ -213,9 +233,15 @@ test("valid draft state survives refresh and auth return, while invalid state is
   await expect(page.getByText("Your draft was restored. Creating the room still requires an explicit action.")).toBeVisible();
   const roomCallsBeforeCreate = boundaries.roomMethods.length;
   await page.getByRole("button", { name: "Create room here" }).click();
-  await expect(page.getByText("Room creation is ready for the next step. Nothing has been submitted.")).toBeVisible();
-  expect(boundaries.roomMethods).toHaveLength(roomCallsBeforeCreate);
-  expect(boundaries.roomMethods.filter((method) => method === "POST")).toHaveLength(0);
+  await expect(page.getByRole("heading", { name: "Room at 46.7701, 23.5901" })).toBeVisible();
+  await expect(page).toHaveURL(/room=33333333-3333-4333-8333-333333333333/);
+  expect(boundaries.roomMethods).toHaveLength(roomCallsBeforeCreate + 1);
+  expect(boundaries.roomMethods.filter((method) => method === "POST")).toHaveLength(1);
+  expect(boundaries.roomCreateRequests).toEqual([{
+    latitude: 46.7701,
+    longitude: 23.5901,
+    clientRequestId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  }]);
 
   await page.goto(`/?room=${rooms[0].id}&draft=javascript:alert(1),23&filter=open`);
   await expect(page.getByRole("heading", { name: "Choose a room" })).toBeVisible();

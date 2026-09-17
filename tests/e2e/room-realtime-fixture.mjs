@@ -10,6 +10,7 @@ const socketEntry = require.resolve("socket.io", {
 });
 const { Server } = await import(pathToFileURL(socketEntry).href);
 const port = Number(process.env.ROOM_REALTIME_FIXTURE_PORT ?? 4108);
+const host = process.env.ROOM_REALTIME_FIXTURE_HOST ?? "127.0.0.1";
 
 const rooms = [{
   id: "11111111-1111-4111-8111-111111111111",
@@ -115,8 +116,8 @@ io.on("connection", (socket) => {
   socket.conn.on("upgrade", (transport) => state.transports.add(transport.name));
 });
 
-server.listen(port, "127.0.0.1", () => {
-  process.stdout.write(`task-008 fixture listening on 127.0.0.1:${port}\n`);
+server.listen(port, host, () => {
+  process.stdout.write(`room realtime fixture listening on ${host}:${port}\n`);
 });
 
 async function shutdown() {

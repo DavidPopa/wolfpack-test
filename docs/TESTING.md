@@ -39,7 +39,7 @@ pnpm services:test:stop
 | 3b | `pnpm test:api:integration` | Backend Jest against isolated real PostgreSQL/Redis, including auth persistence, schema constraints, public rooms, room creation and real Socket.IO delivery. |
 | 4 | `pnpm test:web` | Frontend Jest/React Testing Library for auth state, room map/selection, optimistic creation and client realtime reconciliation. |
 | 5 | `pnpm build` | Production contracts, API and Next.js builds. |
-| 6 | `pnpm test:e2e` | Every Playwright spec under `tests/e2e`; each collected file must receive the runtime it expects. |
+| 6 | `pnpm test:e2e` | Validate complete spec-to-project ownership, run the production and realtime Chromium projects against their isolated origins, aggregate child failures, and clean up the dedicated fixture runtime. |
 | 7 | `pnpm test:tooling` | Node tests for the Codex guard and hook contract. |
 | 8 | `pnpm hooks:check` | The actual Husky entrypoint: lint, types, API unit, API integration, then web Jest. |
 
@@ -95,15 +95,14 @@ RTL demonstrates component/cache behavior under controlled mocks. It does not pr
 
 ### Chromium E2E
 
-`playwright.config.ts` collects every `tests/e2e/*.spec.ts` file in the Chromium project. Its default base URL is `http://127.0.0.1:8081`.
+`playwright.config.ts` assigns every `tests/e2e/*.spec.ts` file to exactly one named Chromium project. `scripts/run-e2e.mjs` verifies that assignment against the files on disk before running either project.
 
-- `tests/e2e/foundation.spec.ts` expects the ordinary production Compose proxy. It checks the production page, anonymous same-origin auth request, health/JSON 404, disabled password signup, mobile auth reachability, and Socket.IO polling plus forced WebSocket through nginx.
-- `tests/e2e/map.spec.ts` uses real production Leaflet but deterministic intercepted room/session responses. It checks persisted pins, the exact visible Stadia Maps/Stamen Design/OpenStreetMap attribution, zoom cap, selection/draft exclusivity, wrapped longitude, URL/auth-return restoration, keyboard focus and desktop/mobile reflow.
-- `tests/e2e/room-realtime.spec.ts` is a targeted two-context scenario. It expects the task-owned in-memory HTTP/session/room fixture in `tests/e2e/room-realtime-fixture.mjs`, a production web build, and the proxy layout in `tests/e2e/room-realtime.nginx.conf`. It proves real browser Socket.IO transport, one event in both contexts, missed-room reconnect recovery, deduplication and selection retention. It does not use PostgreSQL, Redis, Better Auth, or Google.
+- `production-chromium` uses `http://127.0.0.1:8081` by default. `tests/e2e/foundation.spec.ts` checks the production page, anonymous same-origin auth request, health/JSON 404, disabled password signup, mobile auth reachability, and Socket.IO polling plus forced WebSocket through nginx. `tests/e2e/map.spec.ts` uses real production Leaflet with deterministic intercepted room/session responses and checks persisted pins, exact visible attribution, zoom cap, selection/draft exclusivity, wrapped longitude, URL/auth-return restoration, keyboard focus and desktop/mobile reflow.
+- `realtime-chromium` uses `http://127.0.0.1:18081` by default and contains only `tests/e2e/room-realtime.spec.ts`. The root runner starts `tests/e2e/room-realtime-fixture.mjs`, a second container from the exact image ID currently tagged `wolfpack-web:latest`, and the nginx template in `tests/e2e/room-realtime.nginx.conf` on one task-owned bridge network. Stable aliases connect the three containers without a host gateway; only nginx publishes a loopback port. The scenario proves real browser Socket.IO transport, one event in both contexts, missed-room reconnect recovery, deduplication and selection retention. Its HTTP/session persistence is in-memory and it does not use PostgreSQL, Redis, Better Auth, or Google.
 
 All current browser scenarios call `interceptStadiaTiles` from `tests/e2e/map-network.ts`; external Stadia requests receive an in-memory neutral tile. Chromium therefore proves URL construction, Leaflet integration, visible attribution and UI behavior without proving live Stadia availability, limits or domain authentication.
 
-The unfiltered `pnpm test:e2e` command collects the targeted realtime spec as well as the ordinary production-stack specs. A full-suite runner must arrange a runtime compatible with every collected file. The generic `wolfpack` stack does not itself expose the realtime fixture's `/__fixture/state` endpoint or fixture session. If the dedicated fixture/proxy is absent, treat the resulting collection/runtime failure as a real integrated failure; do not filter out the spec or substitute its historical isolated result.
+The unfiltered `pnpm test:e2e` command is the aggregate gate. It requires the separately started `wolfpack` production proxy, collision-checks the configurable realtime proxy port plus all container/network names, then runs both projects without a file or grep filter. A child failure or fixture startup error makes the root command non-zero. On `SIGINT`/`SIGTERM`, the runner terminates and awaits the in-flight owned Playwright/failure process group before `finally` cleanup. Cleanup verifies recorded Docker IDs before removing the three containers and network, preventing a same-name replacement from being removed. Tooling tests fail when a new spec lacks an owner, when the realtime project is omitted, when child status is swallowed, when the container-only topology regresses, or when abort/cleanup escapes recorded ownership.
 
 ## Evidence boundaries
 
@@ -127,6 +126,7 @@ Real Google OAuth is `NOT_RUN` unless a separate sanitized smoke records the con
 - Inspect existing worktrees, containers and listeners before starting services. Stop on an ownership collision; never stop, rebuild or reuse another worktree's runtime as evidence.
 - `pnpm services:test:up` owns Compose project `wolfpack-test`, PostgreSQL `127.0.0.1:55431`, Redis `127.0.0.1:56381`, and tmpfs-backed service data for that run.
 - `pnpm stack:up` owns Compose project `wolfpack` and publishes only nginx at `127.0.0.1:8081`. Use it only when the project/port is free and assigned to the current run.
+- `pnpm test:e2e` verifies the production origin and owns only its dedicated realtime defaults: internal fixture/web ports `4108`/`3108`, loopback proxy `127.0.0.1:18081`, containers `wolfpack-e2e-realtime-fixture` / `-web` / `-proxy`, and network `wolfpack-e2e-realtime`. Override the matching `ROOM_REALTIME_*` ports/names/network together for an isolated worktree. Existing proxy listeners, containers or networks are collisions, never reusable evidence. Fixture/web ports are not published to the host.
 - Preserve the production `postgres-data` volume. Stop owned services with `pnpm stack:stop` and `pnpm services:test:stop`; never use `down --volumes`, database reset, Redis `FLUSH*`, pruning, or broad wildcard cleanup.
 - Test fixtures must use unique/scoped identifiers. Delete only exact task-owned rows, keys, containers, processes, reports and traces. Never clean another worktree's resources.
 - Automated browser tests must retain deterministic Stadia interception. Do not introduce live provider traffic into the standard suite.

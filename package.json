@@ -28,7 +28,7 @@
     "build": "pnpm db:generate && pnpm --filter @map-chat/contracts build && pnpm --filter @map-chat/api build && pnpm --filter @map-chat/web build",
     "stack:up": "docker compose up -d --build --wait",
     "stack:stop": "docker compose stop",
-    "test:e2e": "playwright test",
+    "test:e2e": "node scripts/run-e2e.mjs",
     "test:tooling": "node --test tests/tooling/*.test.mjs",
     "hooks:check": "sh scripts/hooks-check.sh",
     "hooks:install": "husky"

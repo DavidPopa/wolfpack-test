@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { E2E_PROJECTS, projectBaseUrl } from "./scripts/e2e-projects.mjs";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -6,12 +7,16 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   fullyParallel: false,
   retries: 0,
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [["list"], ["html", { open: "never", outputFolder: process.env.PLAYWRIGHT_HTML_OUTPUT_DIR ?? "playwright-report" }]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:8081",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...devices["Desktop Chrome"]
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }]
+  projects: E2E_PROJECTS.map((project) => ({
+    name: project.name,
+    testMatch: project.specs,
+    outputDir: `test-results/${project.name}`,
+    use: { ...devices["Desktop Chrome"], baseURL: projectBaseUrl(project) }
+  }))
 });
